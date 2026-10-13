@@ -186,7 +186,7 @@
             return;
         }
 
-        const quote = `> 💡 **AIホワイトボードのメモを共有しました** (${accountName || "AI"})\n> \n` +
+        const quote = `> 💡 **マイボードのメモを共有しました** (${accountName || "AI"})\n> \n` +
             text.split("\n").map(l => `> ${l}`).join("\n");
 
         if (!confirm(`現在のチャンネル「${currentChannel.name}」にこの回答を共有しますか？`)) {
