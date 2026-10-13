@@ -466,6 +466,21 @@ func (s *Service) DeleteGroup(ctx context.Context, actorID, groupID string) erro
 			return getErr
 		}
 	}
+	aiAccounts, err := s.storage.ListAIAccounts(ctx)
+	if err == nil {
+		aiChanged := false
+		for i := range aiAccounts {
+			if member(aiAccounts[i].Groups, groupID) {
+				aiAccounts[i].Groups = remove(aiAccounts[i].Groups, groupID)
+				if saveErr := s.storage.SaveAIAccount(ctx, &aiAccounts[i]); saveErr == nil {
+					aiChanged = true
+				}
+			}
+		}
+		if aiChanged {
+			_ = s.ReloadAIAccounts(ctx)
+		}
+	}
 	if err := s.storage.DeleteGroup(ctx, groupID); err != nil {
 		return err
 	}

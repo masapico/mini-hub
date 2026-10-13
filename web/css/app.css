@@ -1391,6 +1391,9 @@ label.channel-membership-row { cursor: pointer; }
 .group-detail > form {
     max-width: 500px;
 }
+#aiForm {
+    max-width: 620px;
+}
 .group-empty {
     min-height: 260px;
     display: grid;

@@ -145,7 +145,6 @@ func TestPlainCredentialsRequirePrivatePermissions(t *testing.T) {
 	}
 	for _, body := range []string{
 		`{"version":1,"initialAdmin":{"id":"admin","name":"Admin","password":"password"}}`,
-		`{"aiAccounts":[{"id":"helper","name":"Helper","url":"http://localhost/v1/chat/completions","model":"local-model","token":"direct-test-token"}]}`,
 	} {
 		path := filepath.Join(t.TempDir(), "minihub.json")
 		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {

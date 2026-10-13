@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/masapico/minihub/internal/config"
+	"github.com/masapico/minihub/internal/domain"
 )
 
 func TestAIPayloadWithAttachmentAndTimestamp(t *testing.T) {
@@ -26,7 +26,7 @@ func TestAIPayloadWithAttachmentAndTimestamp(t *testing.T) {
 	}
 
 	endpoint := aiEndpoint{
-		AIAccount: config.AIAccount{
+		AIAccount: domain.AIAccount{
 			ID:    "helper",
 			Model: "test-model",
 		},
@@ -124,7 +124,7 @@ func TestAIPayloadThreadHistoryAttachments(t *testing.T) {
 	}
 
 	endpoint := aiEndpoint{
-		AIAccount: config.AIAccount{
+		AIAccount: domain.AIAccount{
 			ID:    "helper",
 			Model: "test-model",
 		},
@@ -173,5 +173,130 @@ func TestAIPayloadThreadHistoryAttachments(t *testing.T) {
 	}
 	if !strings.Contains(replyText, "[現在日時:") {
 		t.Fatalf("expected reply trigger to contain timestamp, got: %s", replyText)
+	}
+}
+
+func TestAIPayloadParametersAndPrompt(t *testing.T) {
+	s, ctx, user, ch := setupTestService(t)
+	msg, err := s.PostMessage(ctx, user, ch, "@ai:helper 質問です")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	temp := 0.7
+	topP := 0.95
+	maxTokens := 1500
+
+	// 1. With prompt and parameters
+	jobWithAll := aiJob{
+		account: aiEndpoint{
+			AIAccount: domain.AIAccount{
+				ID:           "helper",
+				Model:        "test-model",
+				SystemPrompt: "指示文です",
+				Temperature:  &temp,
+				TopP:         &topP,
+				MaxTokens:    &maxTokens,
+			},
+		},
+		author:  user,
+		channel: ch,
+		id:      "req-003",
+		trigger: msg,
+	}
+	bytesWithAll, err := s.aiPayload(ctx, jobWithAll)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reqWithAll struct {
+		Model       string `json:"model"`
+		Temperature *float64 `json:"temperature"`
+		TopP        *float64 `json:"top_p"`
+		MaxTokens   *int     `json:"max_tokens"`
+		Messages    []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(bytesWithAll, &reqWithAll); err != nil {
+		t.Fatal(err)
+	}
+	if reqWithAll.Temperature == nil || *reqWithAll.Temperature != 0.7 {
+		t.Fatalf("expected temperature 0.7, got %v", reqWithAll.Temperature)
+	}
+	if reqWithAll.TopP == nil || *reqWithAll.TopP != 0.95 {
+		t.Fatalf("expected top_p 0.95, got %v", reqWithAll.TopP)
+	}
+	if reqWithAll.MaxTokens == nil || *reqWithAll.MaxTokens != 1500 {
+		t.Fatalf("expected max_tokens 1500, got %v", reqWithAll.MaxTokens)
+	}
+	if len(reqWithAll.Messages) != 2 || reqWithAll.Messages[0].Role != "system" || reqWithAll.Messages[0].Content != "指示文です" {
+		t.Fatalf("expected system message, got %#v", reqWithAll.Messages)
+	}
+
+	// 2. Without prompt and parameters (empty values)
+	jobBlank := aiJob{
+		account: aiEndpoint{
+			AIAccount: domain.AIAccount{
+				ID:    "helper",
+				Model: "test-model",
+			},
+		},
+		author:  user,
+		channel: ch,
+		id:      "req-004",
+		trigger: msg,
+	}
+	bytesBlank, err := s.aiPayload(ctx, jobBlank)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rawMap map[string]any
+	if err := json.Unmarshal(bytesBlank, &rawMap); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := rawMap["temperature"]; ok {
+		t.Fatal("expected temperature to be omitted when nil")
+	}
+	if _, ok := rawMap["top_p"]; ok {
+		t.Fatal("expected top_p to be omitted when nil")
+	}
+	if _, ok := rawMap["max_tokens"]; ok {
+		t.Fatal("expected max_tokens to be omitted when nil")
+	}
+	var reqBlank struct {
+		Messages []struct {
+			Role string `json:"role"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(bytesBlank, &reqBlank); err != nil {
+		t.Fatal(err)
+	}
+	if len(reqBlank.Messages) != 1 || reqBlank.Messages[0].Role != "user" {
+		t.Fatalf("expected only user message when SystemPrompt is empty, got %#v", reqBlank.Messages)
+	}
+}
+
+func TestAIGroupAuthorization(t *testing.T) {
+	user := domain.User{ID: "alice", Role: domain.RoleUser, Groups: []string{"engineering"}}
+	admin := domain.User{ID: "admin", Role: domain.RoleAdmin}
+	other := domain.User{ID: "bob", Role: domain.RoleUser, Groups: []string{"sales"}}
+
+	// Unrestricted account
+	globalAccount := domain.AIAccount{ID: "global", Enabled: true}
+	if !canUseAI(&user, globalAccount) || !canUseAI(&admin, globalAccount) || !canUseAI(&other, globalAccount) {
+		t.Fatal("unrestricted AI should be accessible to all")
+	}
+
+	// Group-restricted account
+	engAccount := domain.AIAccount{ID: "eng", Enabled: true, Groups: []string{"engineering"}}
+	if !canUseAI(&user, engAccount) {
+		t.Fatal("eng user should be allowed")
+	}
+	if !canUseAI(&admin, engAccount) {
+		t.Fatal("admin should be allowed regardless of groups")
+	}
+	if canUseAI(&other, engAccount) {
+		t.Fatal("sales user should not be allowed for eng AI")
 	}
 }

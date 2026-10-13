@@ -12,13 +12,15 @@ import (
 	"log/slog"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
-	"github.com/masapico/minihub/internal/config"
 	"github.com/masapico/minihub/internal/domain"
 	"github.com/masapico/minihub/internal/storage"
 )
@@ -27,14 +29,83 @@ const aiMaxContextBytes = 1024 * 1024
 const aiMaxContextMessages = 1000
 const aiMaxAttachmentRequestBytes = 70 * 1024 * 1024
 
+var validAIID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,60}$`)
+
+func ValidateAIAccount(a domain.AIAccount) error {
+	if !validAIID.MatchString(a.ID) {
+		return fmt.Errorf("ai: invalid id %q", a.ID)
+	}
+	if strings.TrimSpace(a.Name) == "" || utf8.RuneCountInString(a.Name) > 100 {
+		return fmt.Errorf("ai %s: name must contain 1 to 100 characters", a.ID)
+	}
+	if strings.TrimSpace(a.Model) == "" {
+		return fmt.Errorf("ai %s: model must not be blank", a.ID)
+	}
+	u, err := url.Parse(a.URL)
+	if err != nil || u.Hostname() == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.Fragment != "" {
+		return fmt.Errorf("ai %s: invalid HTTP/HTTPS URL", a.ID)
+	}
+	if a.Timeout != "" {
+		if d, err := time.ParseDuration(a.Timeout); err != nil || d <= 0 {
+			return fmt.Errorf("ai %s: timeout must be positive", a.ID)
+		}
+	}
+	if a.Token != "" && a.TokenEnv != "" {
+		return fmt.Errorf("ai %s: token and tokenEnv cannot both be set", a.ID)
+	}
+	if a.Token != "" && (strings.TrimSpace(a.Token) == "" || strings.ContainsAny(a.Token, "\r\n")) {
+		return fmt.Errorf("ai %s: token must not be blank or contain line breaks", a.ID)
+	}
+	if a.Enabled && a.TokenEnv != "" && strings.TrimSpace(os.Getenv(a.TokenEnv)) == "" {
+		return fmt.Errorf("ai %s: token environment variable is missing", a.ID)
+	}
+	if a.Temperature != nil && (*a.Temperature < 0 || *a.Temperature > 2.0) {
+		return fmt.Errorf("ai %s: temperature must be between 0.0 and 2.0", a.ID)
+	}
+	if a.TopP != nil && (*a.TopP < 0 || *a.TopP > 1.0) {
+		return fmt.Errorf("ai %s: top_p must be between 0.0 and 1.0", a.ID)
+	}
+	if a.MaxTokens != nil && *a.MaxTokens <= 0 {
+		return fmt.Errorf("ai %s: max_tokens must be positive", a.ID)
+	}
+	return nil
+}
+
 type AIAccountSummary struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
+type ManagedAIAccount struct {
+	ID              string   `json:"id"`
+	Name            string   `json:"name"`
+	Enabled         bool     `json:"enabled"`
+	URL             string   `json:"url"`
+	Model           string   `json:"model"`
+	SystemPrompt    string   `json:"systemPrompt,omitempty"`
+	Timeout         string   `json:"timeout,omitempty"`
+	TokenConfigured bool     `json:"tokenConfigured"`
+	TokenEnv        string   `json:"tokenEnv,omitempty"`
+	Groups          []string `json:"groups,omitempty"`
+	Temperature     *float64 `json:"temperature,omitempty"`
+	TopP            *float64 `json:"topP,omitempty"`
+	MaxTokens       *int     `json:"maxTokens,omitempty"`
+}
+
 type aiEndpoint struct {
-	config.AIAccount
+	domain.AIAccount
 	token string
+}
+
+func (a aiEndpoint) RequestTimeout() time.Duration {
+	if a.Timeout == "" {
+		return 120 * time.Second
+	}
+	d, err := time.ParseDuration(a.Timeout)
+	if err != nil || d <= 0 {
+		return 120 * time.Second
+	}
+	return d
 }
 
 type aiJob struct {
@@ -47,6 +118,7 @@ type aiJob struct {
 type aiDispatcher struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
+	mu       sync.RWMutex
 	accounts []aiEndpoint
 	queue    chan aiJob
 	wg       sync.WaitGroup
@@ -54,17 +126,10 @@ type aiDispatcher struct {
 	client   *http.Client
 }
 
-// StartAI is called once at startup, before serving requests or modifying users.
-func (s *Service) StartAI(ctx context.Context, accounts []config.AIAccount, logger *slog.Logger) error {
-	if s.ai != nil {
-		return errors.New("AI dispatcher already started")
-	}
-	if err := config.ValidateAIAccounts(accounts); err != nil {
-		return err
-	}
+func (d *aiDispatcher) setAccounts(accounts []domain.AIAccount) {
 	active := []aiEndpoint{}
 	for _, a := range accounts {
-		if a.IsEnabled() {
+		if a.Enabled {
 			token := a.Token
 			if a.TokenEnv != "" {
 				token = os.Getenv(a.TokenEnv)
@@ -72,8 +137,53 @@ func (s *Service) StartAI(ctx context.Context, accounts []config.AIAccount, logg
 			active = append(active, aiEndpoint{a, token})
 		}
 	}
-	if len(active) == 0 {
+	d.mu.Lock()
+	d.accounts = active
+	d.mu.Unlock()
+}
+
+func (d *aiDispatcher) getAccounts() []aiEndpoint {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	res := make([]aiEndpoint, len(d.accounts))
+	copy(res, d.accounts)
+	return res
+}
+
+func canUseAI(user *domain.User, a domain.AIAccount) bool {
+	if user == nil {
+		return false
+	}
+	if len(a.Groups) == 0 {
+		return true
+	}
+	if user.Role == domain.RoleAdmin {
+		return true
+	}
+	for _, g := range a.Groups {
+		if member(user.Groups, g) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Service) ReloadAIAccounts(ctx context.Context) error {
+	if s.ai == nil {
 		return nil
+	}
+	accounts, err := s.storage.ListAIAccounts(ctx)
+	if err != nil {
+		return err
+	}
+	s.ai.setAccounts(accounts)
+	return nil
+}
+
+// StartAI is called once at startup, before serving requests or modifying users.
+func (s *Service) StartAI(ctx context.Context, logger *slog.Logger) error {
+	if s.ai != nil {
+		return errors.New("AI dispatcher already started")
 	}
 	users, err := s.storage.ListUsers(ctx)
 	if err != nil {
@@ -88,9 +198,14 @@ func (s *Service) StartAI(ctx context.Context, accounts []config.AIAccount, logg
 		logger = slog.Default()
 	}
 	workerCtx, cancel := context.WithCancel(ctx)
-	d := &aiDispatcher{ctx: workerCtx, cancel: cancel, accounts: active, queue: make(chan aiJob, 32), logger: logger,
-		client: &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+	d := &aiDispatcher{
+		ctx: workerCtx, cancel: cancel, queue: make(chan aiJob, 32), logger: logger,
+		client: &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
+	}
 	s.ai = d
+	if err := s.ReloadAIAccounts(ctx); err != nil {
+		return err
+	}
 	for i := 0; i < 4; i++ {
 		d.wg.Add(1)
 		go func() {
@@ -121,13 +236,16 @@ func (s *Service) CloseAI() {
 }
 
 func (s *Service) AIAccounts(ctx context.Context, userID string) ([]AIAccountSummary, error) {
-	if _, err := s.user(ctx, userID); err != nil {
+	u, err := s.user(ctx, userID)
+	if err != nil {
 		return nil, err
 	}
 	result := []AIAccountSummary{}
 	if s.ai != nil {
-		for _, a := range s.ai.accounts {
-			result = append(result, AIAccountSummary{a.ID, a.Name})
+		for _, a := range s.ai.getAccounts() {
+			if a.Enabled && canUseAI(u, a.AIAccount) {
+				result = append(result, AIAccountSummary{a.ID, a.Name})
+			}
 		}
 	}
 	return result, nil
@@ -144,8 +262,18 @@ func (s *Service) enqueueAI(author, channel string, m domain.Message, attPayload
 			wanted[match[2]] = true
 		}
 	}
-	for _, a := range d.accounts {
+	if len(wanted) == 0 {
+		return
+	}
+	u, err := s.user(context.Background(), author)
+	if err != nil {
+		return
+	}
+	for _, a := range d.getAccounts() {
 		if !wanted[a.ID] {
+			continue
+		}
+		if !a.Enabled || !canUseAI(u, a.AIAccount) {
 			continue
 		}
 		var id [16]byte
@@ -175,6 +303,13 @@ func (s *Service) validateAIJob(ctx context.Context, j aiJob) error {
 	if err := s.canPost(ctx, j.author, j.channel); err != nil {
 		return err
 	}
+	u, err := s.user(ctx, j.author)
+	if err != nil {
+		return err
+	}
+	if !canUseAI(u, j.account.AIAccount) {
+		return ErrForbidden
+	}
 	for _, seq := range []int64{j.root(), j.trigger.Seq} {
 		m, err := s.storage.GetMessage(ctx, j.channel, seq)
 		if err != nil {
@@ -203,9 +338,12 @@ type aiContextMessage struct {
 	Content any    `json:"content"`
 }
 type aiRequest struct {
-	Model    string             `json:"model"`
-	Stream   bool               `json:"stream"`
-	Messages []aiContextMessage `json:"messages"`
+	Model       string             `json:"model"`
+	Stream      bool               `json:"stream"`
+	Messages    []aiContextMessage `json:"messages"`
+	Temperature *float64           `json:"temperature,omitempty"`
+	TopP        *float64           `json:"top_p,omitempty"`
+	MaxTokens   *int               `json:"max_tokens,omitempty"`
 }
 
 var errAIContextLimit = errors.New("AI context limit exceeded")
@@ -222,7 +360,13 @@ func (s *Service) aiPayload(ctx context.Context, j aiJob) ([]byte, error) {
 	for _, u := range users {
 		names[u.ID] = u.Name
 	}
-	p := aiRequest{Model: j.account.Model, Messages: []aiContextMessage{}}
+	p := aiRequest{
+		Model:       j.account.Model,
+		Messages:    []aiContextMessage{},
+		Temperature: j.account.Temperature,
+		TopP:        j.account.TopP,
+		MaxTokens:   j.account.MaxTokens,
+	}
 	if strings.TrimSpace(j.account.SystemPrompt) != "" {
 		p.Messages = append(p.Messages, aiContextMessage{Role: "system", Content: j.account.SystemPrompt})
 	}
@@ -428,4 +572,182 @@ func (s *Service) saveAIReply(ctx context.Context, j aiJob, text, kind string) e
 		publisher.ThreadUpdated(ctx, j.channel, j.root(), m.Seq, m.UserID)
 	}
 	return nil
+}
+
+func (s *Service) ListManagedAIAccounts(ctx context.Context, actorID string) ([]ManagedAIAccount, error) {
+	actor, err := s.user(ctx, actorID)
+	if err != nil {
+		return nil, err
+	}
+	if actor.Role != domain.RoleAdmin {
+		return nil, ErrForbidden
+	}
+	list, err := s.storage.ListAIAccounts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res := make([]ManagedAIAccount, len(list))
+	for i, a := range list {
+		res[i] = ManagedAIAccount{
+			ID:              a.ID,
+			Name:            a.Name,
+			Enabled:         a.Enabled,
+			URL:             a.URL,
+			Model:           a.Model,
+			SystemPrompt:    a.SystemPrompt,
+			Timeout:         a.Timeout,
+			TokenConfigured: a.Token != "",
+			TokenEnv:        a.TokenEnv,
+			Groups:          a.Groups,
+			Temperature:     a.Temperature,
+			TopP:            a.TopP,
+			MaxTokens:       a.MaxTokens,
+		}
+	}
+	return res, nil
+}
+
+func (s *Service) GetManagedAIAccount(ctx context.Context, actorID, id string) (*ManagedAIAccount, error) {
+	actor, err := s.user(ctx, actorID)
+	if err != nil {
+		return nil, err
+	}
+	if actor.Role != domain.RoleAdmin {
+		return nil, ErrForbidden
+	}
+	a, err := s.storage.GetAIAccount(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &ManagedAIAccount{
+		ID:              a.ID,
+		Name:            a.Name,
+		Enabled:         a.Enabled,
+		URL:             a.URL,
+		Model:           a.Model,
+		SystemPrompt:    a.SystemPrompt,
+		Timeout:         a.Timeout,
+		TokenConfigured: a.Token != "",
+		TokenEnv:        a.TokenEnv,
+		Groups:          a.Groups,
+		Temperature:     a.Temperature,
+		TopP:            a.TopP,
+		MaxTokens:       a.MaxTokens,
+	}, nil
+}
+
+func (s *Service) CreateAIAccount(ctx context.Context, actorID string, account domain.AIAccount) (*ManagedAIAccount, error) {
+	actor, err := s.user(ctx, actorID)
+	if err != nil {
+		return nil, err
+	}
+	if actor.Role != domain.RoleAdmin {
+		return nil, ErrForbidden
+	}
+	account.ID = strings.TrimSpace(account.ID)
+	account.Name = strings.TrimSpace(account.Name)
+	account.Model = strings.TrimSpace(account.Model)
+	account.URL = strings.TrimSpace(account.URL)
+	if err := ValidateAIAccount(account); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalid, err)
+	}
+	if _, err := s.storage.GetAIAccount(ctx, account.ID); err == nil {
+		return nil, ErrConflict
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	users, err := s.storage.ListUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, u := range users {
+		if u.ID == "ai_"+account.ID {
+			return nil, fmt.Errorf("%w: AI id conflicts with existing user ai_%s", ErrConflict, account.ID)
+		}
+	}
+	account.Version = domain.Version
+	account.Groups = unique(account.Groups)
+	if err := s.storage.SaveAIAccount(ctx, &account); err != nil {
+		return nil, err
+	}
+	if err := s.ReloadAIAccounts(ctx); err != nil {
+		return nil, err
+	}
+	return &ManagedAIAccount{
+		ID:              account.ID,
+		Name:            account.Name,
+		Enabled:         account.Enabled,
+		URL:             account.URL,
+		Model:           account.Model,
+		SystemPrompt:    account.SystemPrompt,
+		Timeout:         account.Timeout,
+		TokenConfigured: account.Token != "",
+		TokenEnv:        account.TokenEnv,
+		Groups:          account.Groups,
+		Temperature:     account.Temperature,
+		TopP:            account.TopP,
+		MaxTokens:       account.MaxTokens,
+	}, nil
+}
+
+func (s *Service) UpdateAIAccount(ctx context.Context, actorID string, id string, account domain.AIAccount, keepExistingToken bool) (*ManagedAIAccount, error) {
+	actor, err := s.user(ctx, actorID)
+	if err != nil {
+		return nil, err
+	}
+	if actor.Role != domain.RoleAdmin {
+		return nil, ErrForbidden
+	}
+	existing, err := s.storage.GetAIAccount(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	account.ID = id
+	account.Name = strings.TrimSpace(account.Name)
+	account.Model = strings.TrimSpace(account.Model)
+	account.URL = strings.TrimSpace(account.URL)
+	if keepExistingToken && account.Token == "" && account.TokenEnv == "" {
+		account.Token = existing.Token
+		account.TokenEnv = existing.TokenEnv
+	}
+	if err := ValidateAIAccount(account); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalid, err)
+	}
+	account.Version = domain.Version
+	account.Groups = unique(account.Groups)
+	if err := s.storage.SaveAIAccount(ctx, &account); err != nil {
+		return nil, err
+	}
+	if err := s.ReloadAIAccounts(ctx); err != nil {
+		return nil, err
+	}
+	return &ManagedAIAccount{
+		ID:              account.ID,
+		Name:            account.Name,
+		Enabled:         account.Enabled,
+		URL:             account.URL,
+		Model:           account.Model,
+		SystemPrompt:    account.SystemPrompt,
+		Timeout:         account.Timeout,
+		TokenConfigured: account.Token != "",
+		TokenEnv:        account.TokenEnv,
+		Groups:          account.Groups,
+		Temperature:     account.Temperature,
+		TopP:            account.TopP,
+		MaxTokens:       account.MaxTokens,
+	}, nil
+}
+
+func (s *Service) DeleteAIAccount(ctx context.Context, actorID, id string) error {
+	actor, err := s.user(ctx, actorID)
+	if err != nil {
+		return err
+	}
+	if actor.Role != domain.RoleAdmin {
+		return ErrForbidden
+	}
+	if err := s.storage.DeleteAIAccount(ctx, id); err != nil {
+		return err
+	}
+	return s.ReloadAIAccounts(ctx)
 }

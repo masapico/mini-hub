@@ -90,4 +90,8 @@ type Storage interface {
 	SaveSchedule(context.Context, *domain.Schedule) error
 	AddScheduleResponse(context.Context, string, domain.ScheduleResponse) (domain.ScheduleResponse, error)
 	ListScheduleResponses(context.Context, string) ([]domain.ScheduleResponse, error)
+	GetAIAccount(context.Context, string) (*domain.AIAccount, error)
+	ListAIAccounts(context.Context) ([]domain.AIAccount, error)
+	SaveAIAccount(context.Context, *domain.AIAccount) error
+	DeleteAIAccount(context.Context, string) error
 }

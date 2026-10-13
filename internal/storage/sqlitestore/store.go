@@ -83,7 +83,7 @@ func Open(path string) (_ *Store, err error) {
 	if err = w.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return nil, err
 	}
-	if version < 0 || version > 5 {
+	if version < 0 || version > 6 {
 		return nil, fmt.Errorf("unsupported SQLite schema version %d", version)
 	}
 	var mode string
@@ -181,6 +181,21 @@ PRAGMA user_version=2;`); err != nil {
 			return nil, err
 		}
 	}
+	if version >= 1 && version <= 5 {
+		tx, e := w.Begin()
+		if e != nil {
+			return nil, e
+		}
+		defer tx.Rollback()
+		if _, err = tx.Exec(`CREATE TABLE IF NOT EXISTS ai_accounts(id TEXT PRIMARY KEY, data TEXT NOT NULL CHECK(json_valid(data)));
+CREATE VIEW IF NOT EXISTS ai_account_groups AS SELECT a.id ai_account_id, j.value group_id FROM ai_accounts a, json_each(a.data, '$.groups') j;
+PRAGMA user_version=6;`); err != nil {
+			return nil, err
+		}
+		if err = tx.Commit(); err != nil {
+			return nil, err
+		}
+	}
 	q.Add("_pragma", "query_only(1)")
 	u.RawQuery = q.Encode()
 	s.read, err = sql.Open("sqlite", u.String())
@@ -251,7 +266,9 @@ CREATE TABLE poll_response_events(poll_id TEXT NOT NULL,seq INTEGER NOT NULL,use
 CREATE INDEX poll_response_latest ON poll_response_events(poll_id,user_id,seq DESC);
 CREATE TABLE migration_complete(id INTEGER PRIMARY KEY CHECK(id=1),manifest TEXT NOT NULL);
 CREATE TABLE withdrawals(kind TEXT NOT NULL,channel_id TEXT NOT NULL,target_id TEXT NOT NULL,data TEXT NOT NULL CHECK(json_valid(data)),PRIMARY KEY(kind,channel_id,target_id));
-PRAGMA user_version=5;
+CREATE TABLE ai_accounts(id TEXT PRIMARY KEY, data TEXT NOT NULL CHECK(json_valid(data)));
+CREATE VIEW ai_account_groups AS SELECT a.id ai_account_id, j.value group_id FROM ai_accounts a, json_each(a.data, '$.groups') j;
+PRAGMA user_version=6;
 `
 
 func get[T any](ctx context.Context, s *Store, table, id string) (*T, error) {

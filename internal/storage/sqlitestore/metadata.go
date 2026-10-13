@@ -85,3 +85,21 @@ func (s *Store) SaveSchedule(ctx context.Context, v *domain.Schedule) error {
 	}
 	return s.save(ctx, "schedules", v.ID, v)
 }
+func (s *Store) GetAIAccount(ctx context.Context, id string) (*domain.AIAccount, error) {
+	return get[domain.AIAccount](ctx, s, "ai_accounts", id)
+}
+func (s *Store) ListAIAccounts(ctx context.Context) ([]domain.AIAccount, error) {
+	return list[domain.AIAccount](ctx, s, "ai_accounts")
+}
+func (s *Store) SaveAIAccount(ctx context.Context, v *domain.AIAccount) error {
+	if v == nil {
+		return errors.New("AIAccount is required")
+	}
+	if v.Version == 0 {
+		v.Version = domain.Version
+	}
+	return s.save(ctx, "ai_accounts", v.ID, v)
+}
+func (s *Store) DeleteAIAccount(ctx context.Context, id string) error {
+	return s.remove(ctx, "ai_accounts", id)
+}

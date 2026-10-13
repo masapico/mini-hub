@@ -133,7 +133,7 @@ func run() (runErr error) {
 	svc.SetMessagePublisher(hub)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := svc.StartAI(ctx, cfg.AIAccounts, logger); err != nil {
+	if err := svc.StartAI(ctx, logger); err != nil {
 		return err
 	}
 	defer svc.CloseAI()

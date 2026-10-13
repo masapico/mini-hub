@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/masapico/minihub/internal/config"
 	"github.com/masapico/minihub/internal/domain"
 	"github.com/masapico/minihub/internal/storage"
 	"github.com/masapico/minihub/internal/storage/storetest"
@@ -63,7 +62,7 @@ func TestAIPayloadRolesAndSystemPrompt(t *testing.T) {
 	}
 	for _, prompt := range []string{"", " \t\n", "簡潔に回答してください。"} {
 		t.Run("prompt="+prompt, func(t *testing.T) {
-			job := aiJob{author: "alice", channel: "c", trigger: trigger, account: aiEndpoint{AIAccount: config.AIAccount{ID: "helper", Model: "local-model", SystemPrompt: prompt}}}
+			job := aiJob{author: "alice", channel: "c", trigger: trigger, account: aiEndpoint{AIAccount: domain.AIAccount{ID: "helper", Model: "local-model", SystemPrompt: prompt}}}
 			b, err := s.aiPayload(ctx, job)
 			if err != nil {
 				t.Fatal(err)
@@ -107,7 +106,7 @@ func TestAIPayloadRolesAndSystemPrompt(t *testing.T) {
 			}
 		})
 	}
-	job := aiJob{author: "alice", channel: "c", trigger: trigger, account: aiEndpoint{AIAccount: config.AIAccount{ID: "helper", Model: "local-model", SystemPrompt: strings.Repeat("x", aiMaxContextBytes)}}}
+	job := aiJob{author: "alice", channel: "c", trigger: trigger, account: aiEndpoint{AIAccount: domain.AIAccount{ID: "helper", Model: "local-model", SystemPrompt: strings.Repeat("x", aiMaxContextBytes)}}}
 	if _, err := s.aiPayload(ctx, job); !errors.Is(err, errAIContextLimit) {
 		t.Fatalf("system prompt excluded from request limit: %v", err)
 	}
@@ -158,14 +157,17 @@ func TestAIRechecksAuthorizationAndWithdrawal(t *testing.T) {
 				io.WriteString(w, `{"choices":[{"message":{"role":"assistant","content":"late reply"}}]}`)
 			}))
 			defer server.Close()
-			account := config.AIAccount{ID: "helper", Name: "AI", URL: server.URL, Model: "test-model"}
-			if err := s.StartAI(ctx, []config.AIAccount{account}, slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
+			account := domain.AIAccount{ID: "helper", Name: "AI", URL: server.URL, Model: "test-model", Enabled: true}
+			if err := store.SaveAIAccount(ctx, &account); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.StartAI(ctx, slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
 				t.Fatal(err)
 			}
 			defer s.CloseAI()
 			// Run synchronously so a missing reply cannot be explained by an
 			// unfinished worker or shutdown canceling the response early.
-			s.runAI(s.ai, aiJob{account: s.ai.accounts[0], author: "alice", channel: "c", id: "request", trigger: trigger})
+			s.runAI(s.ai, aiJob{account: s.ai.getAccounts()[0], author: "alice", channel: "c", id: "request", trigger: trigger})
 			after := int64(0)
 			page, err := store.GetMessages(ctx, "c", storage.MessageQuery{ThreadRootSeq: root.Seq, AfterSeq: &after, Limit: 100})
 			if err != nil || len(page.Messages) != 1 || page.Messages[0].AI != nil {

@@ -194,6 +194,30 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	if path == "api/admin/ai-accounts" {
+		switch r.Method {
+		case http.MethodGet:
+			a.listAdminAIAccounts(w, r, userID)
+		case http.MethodPost:
+			a.createAdminAIAccount(w, r, userID)
+		default:
+			a.methodNotAllowed(w, http.MethodGet, http.MethodPost)
+		}
+		return
+	}
+	if len(parts) == 4 && parts[0] == "api" && parts[1] == "admin" && parts[2] == "ai-accounts" && parts[3] != "" {
+		switch r.Method {
+		case http.MethodGet:
+			a.getAdminAIAccount(w, r, userID, parts[3])
+		case http.MethodPut:
+			a.updateAdminAIAccount(w, r, userID, parts[3])
+		case http.MethodDelete:
+			a.deleteAdminAIAccount(w, r, userID, parts[3])
+		default:
+			a.methodNotAllowed(w, http.MethodGet, http.MethodPut, http.MethodDelete)
+		}
+		return
+	}
 	if path == "api/users" {
 		switch r.Method {
 		case http.MethodGet:
@@ -1116,4 +1140,58 @@ func (a *API) writeJSON(w http.ResponseWriter, status int, value any) {
 	if status != http.StatusNoContent {
 		_ = json.NewEncoder(w).Encode(value)
 	}
+}
+
+func (a *API) listAdminAIAccounts(w http.ResponseWriter, r *http.Request, userID string) {
+	list, err := a.service.ListManagedAIAccounts(r.Context(), userID)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, list)
+}
+
+func (a *API) getAdminAIAccount(w http.ResponseWriter, r *http.Request, userID, id string) {
+	item, err := a.service.GetManagedAIAccount(r.Context(), userID, id)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, item)
+}
+
+func (a *API) createAdminAIAccount(w http.ResponseWriter, r *http.Request, userID string) {
+	var in domain.AIAccount
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		a.writeError(w, service.ErrInvalid)
+		return
+	}
+	created, err := a.service.CreateAIAccount(r.Context(), userID, in)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusCreated, created)
+}
+
+func (a *API) updateAdminAIAccount(w http.ResponseWriter, r *http.Request, userID, id string) {
+	var in domain.AIAccount
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		a.writeError(w, service.ErrInvalid)
+		return
+	}
+	updated, err := a.service.UpdateAIAccount(r.Context(), userID, id, in, in.Token == "" && in.TokenEnv == "")
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, updated)
+}
+
+func (a *API) deleteAdminAIAccount(w http.ResponseWriter, r *http.Request, userID, id string) {
+	if err := a.service.DeleteAIAccount(r.Context(), userID, id); err != nil {
+		a.writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

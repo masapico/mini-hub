@@ -8,6 +8,8 @@ const S = {
         unread: new Map(),
         groups: new Map(),
 		aiAccounts: [],
+		managedAIAccounts: [],
+		selectedAIID: "",
 		stagedAttachments: [],
     },
     $ = (x) => document.getElementById(x),
@@ -2080,6 +2082,236 @@ $("groupForm").onsubmit = async (event) => {
         note(error.message, true);
     }
 };
+
+function renderAIGroupCheckboxes(selectedGroupIDs = []) {
+    const host = $("aiGroupsList");
+    host.replaceChildren();
+    const selectedSet = new Set(selectedGroupIDs || []);
+    const groups = Array.from(S.groups.entries()).map(([id, name]) => ({ id, name }));
+    for (const group of groups) {
+        const label = document.createElement("label");
+        label.className = "group-check-row";
+        label.innerHTML = '<input class="form-check-input" type="checkbox"><span></span><small></small>';
+        const input = label.querySelector("input");
+        input.value = group.id;
+        input.checked = selectedSet.has(group.id);
+        label.querySelector("span").textContent = group.name;
+        label.querySelector("small").textContent = group.id;
+        host.append(label);
+    }
+    if (!groups.length) {
+        const empty = document.createElement("div");
+        empty.className = "group-list-empty";
+        empty.textContent = "登録されているグループはありません";
+        host.append(empty);
+    }
+}
+
+function getSelectedAIGroupIDs() {
+    return Array.from(
+        document.querySelectorAll("#aiGroupsList input[type='checkbox']:checked"),
+        (input) => input.value,
+    );
+}
+
+function showAIPane(mode, account = null) {
+    $("aiEmpty").classList.toggle("hidden", mode !== "empty");
+    $("aiForm").classList.toggle("hidden", mode === "empty");
+    if (mode === "create") {
+        $("aiDetailTitle").textContent = "新規AI登録";
+        $("aiDetailID").textContent = "";
+        $("deleteAI").classList.add("hidden");
+        $("aiID").disabled = false;
+        $("aiID").value = "";
+        $("aiName").value = "";
+        $("aiEnabled").checked = true;
+        $("aiURL").value = "";
+        $("aiModel").value = "";
+        $("aiTimeout").value = "";
+        $("aiToken").value = "";
+        $("aiToken").placeholder = "トークンを入力";
+        $("aiTokenStatus").textContent = "";
+        $("aiTokenEnv").value = "";
+        $("aiSystemPrompt").value = "";
+        $("aiTemperature").value = "";
+        $("aiTopP").value = "";
+        $("aiMaxTokens").value = "";
+        renderAIGroupCheckboxes([]);
+    } else if (mode === "edit" && account) {
+        $("aiDetailTitle").textContent = account.name || "AI設定";
+        $("aiDetailID").textContent = `ID: ${account.id}`;
+        $("deleteAI").classList.remove("hidden");
+        $("aiID").disabled = true;
+        $("aiID").value = account.id;
+        $("aiName").value = account.name || "";
+        $("aiEnabled").checked = account.enabled !== false;
+        $("aiURL").value = account.url || "";
+        $("aiModel").value = account.model || "";
+        $("aiTimeout").value = account.timeout || "";
+        $("aiToken").value = "";
+        $("aiToken").placeholder = account.tokenConfigured ? "設定済み（変更する場合のみ入力）" : "未設定（変更する場合に入力）";
+        $("aiTokenStatus").textContent = account.tokenConfigured ? "※APIトークンが設定されています。変更しない場合は空欄のままにしてください。" : "";
+        $("aiTokenEnv").value = account.tokenEnv || "";
+        $("aiSystemPrompt").value = account.systemPrompt || "";
+        $("aiTemperature").value = account.temperature != null ? account.temperature : "";
+        $("aiTopP").value = account.topP != null ? account.topP : "";
+        $("aiMaxTokens").value = account.maxTokens != null ? account.maxTokens : "";
+        renderAIGroupCheckboxes(account.groups || []);
+    }
+}
+
+function renderAIList() {
+    const query = $("aiSearch").value.trim().toLocaleLowerCase("ja-JP");
+    const accounts = (S.managedAIAccounts || []).filter((a) =>
+        !query || a.id.toLocaleLowerCase().includes(query) ||
+        (a.name || "").toLocaleLowerCase("ja-JP").includes(query),
+    );
+    const host = $("aiList");
+    host.replaceChildren();
+    $("aiCount").textContent = `${accounts.length} / ${(S.managedAIAccounts || []).length} 件`;
+    for (const a of accounts) {
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "group-row";
+        row.classList.toggle("selected", a.id === S.selectedAIID);
+        row.innerHTML = '<span><b></b><small></small></span><span class="group-row-count"></span>';
+        row.querySelector("b").textContent = a.name;
+        row.querySelector("small").textContent = a.id;
+        row.querySelector(".group-row-count").textContent = !a.enabled ? "無効" : a.groups?.length ? `${a.groups.length} グループ` : "全ユーザー";
+        row.onclick = () => selectManagedAI(a.id);
+        host.append(row);
+    }
+    if (!accounts.length) {
+        const empty = document.createElement("div");
+        empty.className = "group-list-empty";
+        empty.textContent = query ? "該当するAIはありません" : "AIが登録されていません";
+        host.append(empty);
+    }
+}
+
+async function selectManagedAI(id) {
+    S.selectedAIID = id;
+    renderAIList();
+    try {
+        const account = await api(`/api/admin/ai-accounts/${encodeURIComponent(id)}`);
+        showAIPane("edit", account);
+    } catch (error) {
+        note(`AI設定を取得できません: ${error.message}`, true);
+    }
+}
+
+async function loadManagedAIAccounts(selectID = S.selectedAIID) {
+    await loadGroups();
+    try {
+        S.managedAIAccounts = await api("/api/admin/ai-accounts");
+    } catch (error) {
+        note(`AI一覧を取得できません: ${error.message}`, true);
+        S.managedAIAccounts = [];
+    }
+    S.selectedAIID = S.managedAIAccounts.some((a) => a.id === selectID) ? selectID : "";
+    renderAIList();
+    if (S.selectedAIID) {
+        await selectManagedAI(S.selectedAIID);
+    } else {
+        showAIPane(S.managedAIAccounts.length ? "empty" : "create");
+    }
+}
+
+async function reloadAIAccounts() {
+    S.aiAccounts = await api("/api/ai-accounts").catch((error) => {
+        note(`AI一覧を取得できません: ${error.message}`, true);
+        return [];
+    });
+    $("aiButton")?.classList.toggle("hidden", !S.aiAccounts.length);
+    $("threadAIButton")?.classList.toggle("hidden", !S.aiAccounts.length);
+    return S.aiAccounts;
+}
+
+$("aiSettings").onclick = async () => {
+    $("aiSearch").value = "";
+    await loadManagedAIAccounts();
+    bootstrap.Modal.getOrCreateInstance($("aiModal")).show();
+};
+$("aiSearch").oninput = renderAIList;
+$("newAI").onclick = () => {
+    S.selectedAIID = "";
+    renderAIList();
+    showAIPane("create");
+    $("aiID").focus();
+};
+$("deleteAI").onclick = async () => {
+    if (!S.selectedAIID) return;
+    const account = S.managedAIAccounts?.find((a) => a.id === S.selectedAIID);
+    const name = account ? account.name : S.selectedAIID;
+    if (!window.confirm(`「${name}」を削除しますか？\n\nこの操作は元に戻せません。`)) return;
+    try {
+        await api(`/api/admin/ai-accounts/${encodeURIComponent(S.selectedAIID)}`, { method: "DELETE" });
+        S.selectedAIID = "";
+        note("AIを削除しました");
+        await reloadAIAccounts();
+        await loadManagedAIAccounts();
+    } catch (error) {
+        note(error.message, true);
+    }
+};
+$("aiForm").onsubmit = async (event) => {
+    event.preventDefault();
+    const token = $("aiToken").value;
+    const tokenEnv = $("aiTokenEnv").value.trim();
+    if (token && tokenEnv) {
+        return note("APIトークンと環境変数名はどちらか一方のみ指定してください", true);
+    }
+    const tempVal = $("aiTemperature").value.trim();
+    const topPVal = $("aiTopP").value.trim();
+    const maxTokensVal = $("aiMaxTokens").value.trim();
+    const temperature = tempVal === "" ? null : Number(tempVal);
+    const topP = topPVal === "" ? null : Number(topPVal);
+    const maxTokens = maxTokensVal === "" ? null : parseInt(maxTokensVal, 10);
+
+    const payload = {
+        name: $("aiName").value.trim(),
+        enabled: $("aiEnabled").checked,
+        url: $("aiURL").value.trim(),
+        model: $("aiModel").value.trim(),
+        timeout: $("aiTimeout").value.trim(),
+        token,
+        tokenEnv,
+        groups: getSelectedAIGroupIDs(),
+        systemPrompt: $("aiSystemPrompt").value,
+        temperature,
+        topP,
+        maxTokens,
+    };
+
+    if (S.selectedAIID) {
+        try {
+            await api(`/api/admin/ai-accounts/${encodeURIComponent(S.selectedAIID)}`, {
+                method: "PUT",
+                body: JSON.stringify(payload),
+            });
+            note("AI設定を保存しました");
+            await reloadAIAccounts();
+            await loadManagedAIAccounts(S.selectedAIID);
+        } catch (error) {
+            note(error.message, true);
+        }
+    } else {
+        const id = $("aiID").value.trim();
+        payload.id = id;
+        try {
+            await api("/api/admin/ai-accounts", {
+                method: "POST",
+                body: JSON.stringify(payload),
+            });
+            note("AIを登録しました");
+            await reloadAIAccounts();
+            await loadManagedAIAccounts(id);
+        } catch (error) {
+            note(error.message, true);
+        }
+    }
+};
+
 api("/api/me")
     .then(async (me) => {
         setup(me);
@@ -3112,9 +3344,7 @@ loadChannels = async function () {
         S.directory = new Map(
             users.map((user) => [user.id, user.name]),
         );
-        S.aiAccounts = await api("/api/ai-accounts").catch(error => { note(`AI一覧を取得できません: ${error.message}`, true); return []; });
-        $("aiButton").classList.toggle("hidden", !S.aiAccounts.length);
-        $("threadAIButton").classList.toggle("hidden", !S.aiAccounts.length);
+        await reloadAIAccounts();
     }
     const [channels, readResult] = await Promise.all([
         api("/api/channels"),

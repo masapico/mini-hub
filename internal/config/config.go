@@ -13,7 +13,6 @@ import (
 )
 
 type Config struct {
-	AIAccounts    []AIAccount   `json:"aiAccounts,omitempty"`
 	Storage       Storage       `json:"storage"`
 	Version       int           `json:"version"`
 	Server        Server        `json:"server"`
@@ -102,9 +101,6 @@ func Load(path string, explicit bool) (Config, bool, error) {
 	if cfg.Version != 1 {
 		return cfg, false, fmt.Errorf("unsupported config version %d", cfg.Version)
 	}
-	if err := ValidateAIAccounts(cfg.AIAccounts); err != nil {
-		return cfg, false, err
-	}
 	if cfg.Storage.Type != "sqlite" {
 		return cfg, false, errors.New("storage.type must be sqlite; file storage has been discontinued (use minihub migrate -to sqlite)")
 	}
@@ -166,12 +162,6 @@ func Load(path string, explicit bool) (Config, bool, error) {
 	secretField := ""
 	if cfg.InitialAdmin != nil && cfg.InitialAdmin.Password != "" {
 		secretField = "initialAdmin.password"
-	}
-	for _, a := range cfg.AIAccounts {
-		if a.Token != "" {
-			secretField = "aiAccounts.token"
-			break
-		}
 	}
 	if secretField != "" {
 		if runtime.GOOS != "windows" {

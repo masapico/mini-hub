@@ -31,7 +31,6 @@
   "logging": {
     "level": "info"
   },
-  "aiAccounts": [],
   "initialAdmin": {
     "id": "admin",
     "name": "管理者",

@@ -94,6 +94,23 @@ type AIMessage struct {
 	Kind             string `json:"kind"`
 }
 
+type AIAccount struct {
+	Version      int      `json:"version"`
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	Enabled      bool     `json:"enabled"`
+	URL          string   `json:"url"`
+	Model        string   `json:"model"`
+	SystemPrompt string   `json:"systemPrompt,omitempty"`
+	Timeout      string   `json:"timeout,omitempty"`
+	Token        string   `json:"token,omitempty"`
+	TokenEnv     string   `json:"tokenEnv,omitempty"`
+	Groups       []string `json:"groups,omitempty"`
+	Temperature  *float64 `json:"temperature,omitempty"`
+	TopP         *float64 `json:"topP,omitempty"`
+	MaxTokens    *int     `json:"maxTokens,omitempty"`
+}
+
 type Withdrawal struct {
 	Version   int               `json:"version"`
 	Kind      string            `json:"kind"`

@@ -127,6 +127,10 @@ erDiagram
         text id PK
         json data
     }
+    ai_accounts {
+        text id PK
+        json data
+    }
     counters {
         text kind PK
         text id PK
@@ -211,13 +215,13 @@ erDiagram
     channels ||--o{ withdrawals : "channel_id"
 ```
 
-図の線は参照関係を示します。DB制約として宣言された外部キーは `mention_refs.message_id → messages.id` です。その他の参照はサービス層とストレージ処理で検証し、SQLの外部キー制約を示すものではありません。`users`・`groups`・`channels`・`sessions`・`schedules`・`polls` はバージョン付きJSONを1件ずつ保持します。`user_groups`、`channel_members`、`channel_groups`、`channel_managers` はそのJSONから作る**ビュー**であり、別の保存テーブルではありません。
+図の線は参照関係を示します。DB制約として宣言された外部キーは `mention_refs.message_id → messages.id` です。その他の参照はサービス層とストレージ処理で検証し、SQLの外部キー制約を示すものではありません。`users`・`groups`・`channels`・`sessions`・`schedules`・`polls`・`ai_accounts` はバージョン付きJSONを1件ずつ保持します。`user_groups`、`channel_members`、`channel_groups`、`channel_managers`、`ai_account_groups` はそのJSONから作る**ビュー**であり、別の保存テーブルではありません。
 
-`messages` は `(channel_id, seq)` が主キーで `id` は全体で一意です。`messages` にはスレッド・時刻・投稿者の索引があります。`counters` は採番の正本で、将来履歴を消しても連番を再利用しないための表です。`reaction_events` と回答イベント表は履歴、`reactions` はリアクションの現在状態を持ちます。SQLiteスキーマは現行の `PRAGMA user_version=4` です。
+`messages` は `(channel_id, seq)` が主キーで `id` は全体で一意です。`messages` にはスレッド・時刻・投稿者の索引があります。`counters` は採番の正本で、将来履歴を消しても連番を再利用しないための表です。`reaction_events` と回答イベント表は履歴、`reactions` はリアクションの現在状態を持ちます。SQLiteスキーマは現行の `PRAGMA user_version=6` です。
 
 ## 保存構成（SQLite）
 
-永続化は組み込みSQLite（`dataDir/minuhub.db`）に一本化されています。`storage.json` に `"sqlite"` を記録し、`.minihub.lock` でプロセス排他制御を行います。メッセージ、既読状態、リアクション、アンケート、予定調整の全データがSQLiteのリレーショナルテーブルに保持されます。
+永続化は組み込みSQLite（`dataDir/minuhub.db`）に一本化されています。`storage.json` に `"sqlite"` を記録し、`.minihub.lock` でプロセス排他制御を行います。メッセージ、既読状態、リアクション、アンケート、予定調整、AIアカウント設定の全データがSQLiteのリレーショナルテーブルに保持されます。
 
 メッセージの添付ファイルメタデータ（`messages.attachments` 列）には、ファイルID・ファイル名・サイズのみがJSON配列として保存され、サーバーホスト内には実体ファイルは保持されません。
 
@@ -240,8 +244,10 @@ flowchart TB
     ROOT --> WD["withdrawals/{channelId}/{kind}/{targetId}.json"]
 ```
 
-## AI投稿
+## AIアカウントとAI投稿
+
+AIアカウント設定は、組み込みSQLiteのスキーマv6（`ai_accounts`テーブル）にJSONデータとして永続化され、設定されたグループ情報は`ai_account_groups`ビューで展開されます。
 
 AI回答・エラーは通常のスレッド返信として保存します。`userId`は`ai_<設定ID>`、任意項目`ai`は`id`、`name`、`requestId`、`triggerMessageId`、`requestedBy`、`kind`（`answer`または`error`）です。名前は保存時点の値を保持し、設定削除後も表示できます。人へのメンション通知先は空配列です。
 
-永続化はSQLiteスキーマv4でnullableなJSON文字列列`messages.ai`に保存します。旧データは`ai`なしで読み込み、依頼中の状態は永続化しません。詳細は[AI連携](ai.md)を参照してください。
+永続化はSQLiteスキーマv4以降のnullableなJSON文字列列`messages.ai`に保存します。旧データは`ai`なしで読み込み、依頼中の状態は永続化しません。詳細は[AI連携](ai.md)を参照してください。
