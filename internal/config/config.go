@@ -35,8 +35,10 @@ type Server struct {
 	SessionTTL    string `json:"sessionTTL"`
 }
 type Features struct {
-	SelfPasswordChange bool   `json:"selfPasswordChange"`
-	NetworkPathMode    string `json:"networkPathMode"`
+	SelfPasswordChange  bool   `json:"selfPasswordChange"`
+	NetworkPathMode     string `json:"networkPathMode"`
+	AIWhiteboardEnabled bool   `json:"aiWhiteboardEnabled"`
+	AIDailyQuota        int    `json:"aiDailyQuota"`
 }
 type TLS struct {
 	Enabled  bool   `json:"enabled"`
@@ -69,7 +71,7 @@ func Defaults() Config {
 			WorkspaceTitle: "minihub",
 			LoginMessage:   "ユーザーIDとパスワードを入力してください。",
 		},
-		Features:      Features{NetworkPathMode: "copy"},
+		Features:      Features{NetworkPathMode: "copy", AIWhiteboardEnabled: true, AIDailyQuota: 0},
 		Notifications: Notifications{MentionRetentionDays: 365, OSNotificationsEnabled: true},
 		Logging:       Logging{Level: "info"},
 	}
@@ -150,6 +152,9 @@ func Load(path string, explicit bool) (Config, bool, error) {
 	}
 	if cfg.Features.NetworkPathMode != "disabled" && cfg.Features.NetworkPathMode != "copy" && cfg.Features.NetworkPathMode != "open-and-copy" {
 		return cfg, false, errors.New("features.networkPathMode must be disabled, copy, or open-and-copy")
+	}
+	if cfg.Features.AIDailyQuota < 0 {
+		return cfg, false, errors.New("features.aiDailyQuota must be zero or positive")
 	}
 	secretField := ""
 	if cfg.InitialAdmin != nil && cfg.InitialAdmin.Password != "" {

@@ -94,4 +94,7 @@ type Storage interface {
 	ListAIAccounts(context.Context) ([]domain.AIAccount, error)
 	SaveAIAccount(context.Context, *domain.AIAccount) error
 	DeleteAIAccount(context.Context, string) error
+	IncrementAIDailyUsage(context.Context, string, string) (int, error)
+	GetAIDailyUsage(context.Context, string, string) (int, error)
+	ListAIDailyUsage(context.Context, string) (map[string]int, error)
 }

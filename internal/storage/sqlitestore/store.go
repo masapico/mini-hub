@@ -83,7 +83,7 @@ func Open(path string) (_ *Store, err error) {
 	if err = w.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return nil, err
 	}
-	if version < 0 || version > 6 {
+	if version < 0 || version > 7 {
 		return nil, fmt.Errorf("unsupported SQLite schema version %d", version)
 	}
 	var mode string
@@ -196,6 +196,20 @@ PRAGMA user_version=6;`); err != nil {
 			return nil, err
 		}
 	}
+	if version >= 1 && version <= 6 {
+		tx, e := w.Begin()
+		if e != nil {
+			return nil, e
+		}
+		defer tx.Rollback()
+		if _, err = tx.Exec(`CREATE TABLE IF NOT EXISTS ai_daily_usage(user_id TEXT NOT NULL, date TEXT NOT NULL, count INTEGER NOT NULL, PRIMARY KEY(user_id, date));
+PRAGMA user_version=7;`); err != nil {
+			return nil, err
+		}
+		if err = tx.Commit(); err != nil {
+			return nil, err
+		}
+	}
 	q.Add("_pragma", "query_only(1)")
 	u.RawQuery = q.Encode()
 	s.read, err = sql.Open("sqlite", u.String())
@@ -268,7 +282,8 @@ CREATE TABLE migration_complete(id INTEGER PRIMARY KEY CHECK(id=1),manifest TEXT
 CREATE TABLE withdrawals(kind TEXT NOT NULL,channel_id TEXT NOT NULL,target_id TEXT NOT NULL,data TEXT NOT NULL CHECK(json_valid(data)),PRIMARY KEY(kind,channel_id,target_id));
 CREATE TABLE ai_accounts(id TEXT PRIMARY KEY, data TEXT NOT NULL CHECK(json_valid(data)));
 CREATE VIEW ai_account_groups AS SELECT a.id ai_account_id, j.value group_id FROM ai_accounts a, json_each(a.data, '$.groups') j;
-PRAGMA user_version=6;
+CREATE TABLE ai_daily_usage(user_id TEXT NOT NULL, date TEXT NOT NULL, count INTEGER NOT NULL, PRIMARY KEY(user_id, date));
+PRAGMA user_version=7;
 `
 
 func get[T any](ctx context.Context, s *Store, table, id string) (*T, error) {

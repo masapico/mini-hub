@@ -95,3 +95,42 @@ func TestAIAccountStorage(t *testing.T) {
 		t.Fatal("expected error after delete, got nil")
 	}
 }
+
+func TestAIDailyUsageStorage(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "chat.db")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+
+	count, err := s.GetAIDailyUsage(ctx, "u1", "2026-10-13")
+	if err != nil || count != 0 {
+		t.Fatalf("initial usage: %d, %v", count, err)
+	}
+
+	c1, err := s.IncrementAIDailyUsage(ctx, "u1", "2026-10-13")
+	if err != nil || c1 != 1 {
+		t.Fatalf("after first inc: %d, %v", c1, err)
+	}
+
+	c2, err := s.IncrementAIDailyUsage(ctx, "u1", "2026-10-13")
+	if err != nil || c2 != 2 {
+		t.Fatalf("after second inc: %d, %v", c2, err)
+	}
+
+	c3, err := s.IncrementAIDailyUsage(ctx, "u2", "2026-10-13")
+	if err != nil || c3 != 1 {
+		t.Fatalf("u2 inc: %d, %v", c3, err)
+	}
+
+	list, err := s.ListAIDailyUsage(ctx, "2026-10-13")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 2 || list["u1"] != 2 || list["u2"] != 1 {
+		t.Fatalf("unexpected list: %#v", list)
+	}
+}
+

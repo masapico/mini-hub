@@ -2,7 +2,9 @@ package sqlitestore
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+
 	"github.com/masapico/minihub/internal/domain"
 )
 
@@ -103,3 +105,43 @@ func (s *Store) SaveAIAccount(ctx context.Context, v *domain.AIAccount) error {
 func (s *Store) DeleteAIAccount(ctx context.Context, id string) error {
 	return s.remove(ctx, "ai_accounts", id)
 }
+
+func (s *Store) IncrementAIDailyUsage(ctx context.Context, userID, date string) (int, error) {
+	if err := checkIDs(userID); err != nil {
+		return 0, err
+	}
+	var count int
+	err := s.write.QueryRowContext(ctx, `INSERT INTO ai_daily_usage(user_id, date, count) VALUES(?, ?, 1) ON CONFLICT(user_id, date) DO UPDATE SET count=count+1 RETURNING count`, userID, date).Scan(&count)
+	return count, err
+}
+
+func (s *Store) GetAIDailyUsage(ctx context.Context, userID, date string) (int, error) {
+	if err := checkIDs(userID); err != nil {
+		return 0, err
+	}
+	var count int
+	err := s.read.QueryRowContext(ctx, `SELECT count FROM ai_daily_usage WHERE user_id = ? AND date = ?`, userID, date).Scan(&count)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	return count, err
+}
+
+func (s *Store) ListAIDailyUsage(ctx context.Context, date string) (map[string]int, error) {
+	rows, err := s.read.QueryContext(ctx, `SELECT user_id, count FROM ai_daily_usage WHERE date = ?`, date)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make(map[string]int)
+	for rows.Next() {
+		var uid string
+		var count int
+		if err := rows.Scan(&uid, &count); err != nil {
+			return nil, err
+		}
+		result[uid] = count
+	}
+	return result, rows.Err()
+}
+

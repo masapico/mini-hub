@@ -194,6 +194,30 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	if path == "api/ai/direct" {
+		if r.Method != http.MethodPost {
+			a.methodNotAllowed(w, http.MethodPost)
+			return
+		}
+		a.directAI(w, r, userID)
+		return
+	}
+	if path == "api/ai/quota" {
+		if r.Method != http.MethodGet {
+			a.methodNotAllowed(w, http.MethodGet)
+			return
+		}
+		a.aiQuota(w, r, userID)
+		return
+	}
+	if path == "api/admin/ai/usage" {
+		if r.Method != http.MethodGet {
+			a.methodNotAllowed(w, http.MethodGet)
+			return
+		}
+		a.adminAIUsage(w, r, userID)
+		return
+	}
 	if path == "api/admin/ai-accounts" {
 		switch r.Method {
 		case http.MethodGet:
@@ -1195,3 +1219,45 @@ func (a *API) deleteAdminAIAccount(w http.ResponseWriter, r *http.Request, userI
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (a *API) directAI(w http.ResponseWriter, r *http.Request, userID string) {
+	var input domain.AIDirectRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		a.writeError(w, service.ErrInvalid)
+		return
+	}
+	resp, err := a.service.DirectAICall(r.Context(), userID, input)
+	if err != nil {
+		if errors.Is(err, service.ErrQuotaExceeded) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"error": "本日のAI利用上限に達しました。",
+			})
+			return
+		}
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, resp)
+}
+
+func (a *API) aiQuota(w http.ResponseWriter, r *http.Request, userID string) {
+	quota, err := a.service.GetAIQuota(r.Context(), userID)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, quota)
+}
+
+func (a *API) adminAIUsage(w http.ResponseWriter, r *http.Request, userID string) {
+	date := r.URL.Query().Get("date")
+	summary, err := a.service.GetAIDailyUsageSummary(r.Context(), userID, date)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, summary)
+}
+

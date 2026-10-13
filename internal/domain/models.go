@@ -278,3 +278,44 @@ type ReactionState struct {
 	Key        string   `json:"key"`
 	UserIDs    []string `json:"userIds"`
 }
+
+type AIDirectMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type AIDirectAttachment struct {
+	Name string `json:"name"`
+	Data string `json:"data"` // base64
+}
+
+type AIDirectRequest struct {
+	AIAccountID string               `json:"aiAccountId"`
+	Messages    []AIDirectMessage    `json:"messages"`
+	Attachments []AIDirectAttachment `json:"attachments,omitempty"`
+}
+
+type AIDirectResponse struct {
+	Reply      string `json:"reply"`
+	DailyQuota int    `json:"dailyQuota"`
+	DailyUsed  int    `json:"dailyUsed"`
+}
+
+type AIQuotaResponse struct {
+	DailyQuota int  `json:"dailyQuota"`
+	DailyUsed  int  `json:"dailyUsed"`
+	Enabled    bool `json:"enabled"`
+}
+
+type AIDailyUsageEntry struct {
+	UserID   string `json:"userId"`
+	UserName string `json:"userName"`
+	Count    int    `json:"count"`
+}
+
+type AIDailyUsageSummary struct {
+	Date       string              `json:"date"`
+	TotalCount int                 `json:"totalCount"`
+	UserUsage  []AIDailyUsageEntry `json:"userUsage"`
+}
+

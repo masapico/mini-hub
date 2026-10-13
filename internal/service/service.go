@@ -26,6 +26,8 @@ var (
 	ErrConflict        = errors.New("conflict")
 	ErrStale           = errors.New("stale revision")
 	ErrInvalid         = errors.New("invalid request")
+	ErrQuotaExceeded   = errors.New("daily AI quota exceeded")
+	ErrAIUnavailable   = errors.New("ai service unavailable")
 )
 
 const MaxMessageBytes = 16 * 1024
@@ -119,19 +121,21 @@ type MessageReactions struct {
 }
 
 type Service struct {
-	ai                 *aiDispatcher
-	storage            storage.Storage
-	attachmentMgr      *AttachmentManager
-	pollMu             sync.Mutex
-	mu                 sync.Mutex
-	userMu             sync.Mutex
-	groupMu            sync.RWMutex
-	presenceMu         sync.Mutex
-	presenceMembers    map[string][]string
-	locks              map[string]*sync.Mutex
-	publisher          MessagePublisher
-	selfPasswordChange bool
-	mentionRetention   time.Duration
+	ai                  *aiDispatcher
+	storage             storage.Storage
+	attachmentMgr       *AttachmentManager
+	pollMu              sync.Mutex
+	mu                  sync.Mutex
+	userMu              sync.Mutex
+	groupMu             sync.RWMutex
+	presenceMu          sync.Mutex
+	presenceMembers     map[string][]string
+	locks               map[string]*sync.Mutex
+	publisher           MessagePublisher
+	selfPasswordChange  bool
+	mentionRetention    time.Duration
+	aiWhiteboardEnabled bool
+	aiDailyQuota        int
 }
 
 var validUserID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
@@ -161,14 +165,23 @@ func New(store storage.Storage) *Service {
 
 func NewWithOptions(store storage.Storage, selfPasswordChange bool, mentionRetention time.Duration) *Service {
 	return &Service{
-		storage:            store,
-		attachmentMgr:      newAttachmentManager(),
-		locks:              make(map[string]*sync.Mutex),
-		presenceMembers:    make(map[string][]string),
-		selfPasswordChange: selfPasswordChange,
-		mentionRetention:   mentionRetention,
+		storage:             store,
+		attachmentMgr:       newAttachmentManager(),
+		locks:               make(map[string]*sync.Mutex),
+		presenceMembers:     make(map[string][]string),
+		selfPasswordChange:  selfPasswordChange,
+		mentionRetention:    mentionRetention,
+		aiWhiteboardEnabled: true,
 	}
 }
+
+func (s *Service) SetAIWhiteboardOptions(enabled bool, quota int) {
+	s.aiWhiteboardEnabled = enabled
+	s.aiDailyQuota = quota
+}
+
+func (s *Service) AIWhiteboardEnabled() bool { return s.aiWhiteboardEnabled }
+func (s *Service) AIDailyQuota() int        { return s.aiDailyQuota }
 
 func (s *Service) SelfPasswordChangeEnabled() bool { return s.selfPasswordChange }
 

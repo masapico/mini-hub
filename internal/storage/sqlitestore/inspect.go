@@ -37,7 +37,7 @@ func inspect(path string) (*sql.DB, error) {
 	}
 	db.SetMaxOpenConns(1)
 	var version int
-	if err = db.QueryRow("PRAGMA user_version").Scan(&version); err == nil && version != 1 && version != 2 && version != 3 && version != 4 && version != 5 && version != 6 {
+	if err = db.QueryRow("PRAGMA user_version").Scan(&version); err == nil && version != 1 && version != 2 && version != 3 && version != 4 && version != 5 && version != 6 && version != 7 {
 		err = errors.New("existing database has an unsupported or missing chat schema")
 	}
 	if err != nil {

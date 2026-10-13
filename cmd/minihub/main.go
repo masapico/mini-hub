@@ -125,6 +125,7 @@ func run() (runErr error) {
 	}
 	retention := time.Duration(cfg.Notifications.MentionRetentionDays) * 24 * time.Hour
 	svc := service.NewWithOptions(store, cfg.Features.SelfPasswordChange, retention)
+	svc.SetAIWhiteboardOptions(cfg.Features.AIWhiteboardEnabled, cfg.Features.AIDailyQuota)
 	ttl, _ := time.ParseDuration(cfg.Server.SessionTTL)
 	sessions := auth.NewManagerWithCookiePath(store, *secureCookie, ttl, *basePath+"/")
 	hub := realtime.New(sessions.Authenticate, svc.CanReadChannel, svc.CanPostChannel, logger)
@@ -139,7 +140,7 @@ func run() (runErr error) {
 	mux := http.NewServeMux()
 	mux.Handle("/api/realtime", hub)
 	mux.Handle("/api/", httpapi.New(svc, sessions, logger))
-	mux.Handle("/", web.Handler(sessions, web.Options{BasePath: *basePath, WorkspaceTitle: cfg.UI.WorkspaceTitle, LoginMessage: cfg.UI.LoginMessage, NetworkPathMode: cfg.Features.NetworkPathMode, OSNotificationsEnabled: &cfg.Notifications.OSNotificationsEnabled}))
+	mux.Handle("/", web.Handler(sessions, web.Options{BasePath: *basePath, WorkspaceTitle: cfg.UI.WorkspaceTitle, LoginMessage: cfg.UI.LoginMessage, NetworkPathMode: cfg.Features.NetworkPathMode, OSNotificationsEnabled: &cfg.Notifications.OSNotificationsEnabled, AIWhiteboardEnabled: &cfg.Features.AIWhiteboardEnabled}))
 	server := &http.Server{Addr: *addr, Handler: web.Mount(*basePath, mux), ErrorLog: slog.NewLogLogger(logger.Handler(), slog.LevelError), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 * 1024}
 	server.TLSConfig = tlsConfig
 	scheme := "http"

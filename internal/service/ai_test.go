@@ -3,6 +3,9 @@ package service
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -300,3 +303,97 @@ func TestAIGroupAuthorization(t *testing.T) {
 		t.Fatal("sales user should not be allowed for eng AI")
 	}
 }
+
+func TestDirectAICallQuotaAndUsage(t *testing.T) {
+	s, ctx, user, _ := setupTestService(t)
+
+	// Test GetAIQuota initially
+	quota, err := s.GetAIQuota(ctx, user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if quota.DailyQuota != 0 || quota.DailyUsed != 0 || !quota.Enabled {
+		t.Fatalf("unexpected initial quota: %+v", quota)
+	}
+
+	// Setup mock AI server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{
+					"message": map[string]any{
+						"role":    "assistant",
+						"content": "AI reply from whiteboard",
+					},
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	account := domain.AIAccount{
+		ID:      "board-ai",
+		Name:    "Board AI",
+		Enabled: true,
+		URL:     server.URL,
+		Model:   "test-model",
+	}
+	if err := s.storage.SaveAIAccount(ctx, &account); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.StartAI(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
+	defer s.CloseAI()
+
+	// 1. Quota = 0 (unlimited)
+	s.SetAIWhiteboardOptions(true, 0)
+	resp, err := s.DirectAICall(ctx, user, domain.AIDirectRequest{
+		AIAccountID: "board-ai",
+		Messages: []domain.AIDirectMessage{
+			{Role: "user", Content: "Hello AI"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("first call failed: %v", err)
+	}
+	if resp.Reply != "AI reply from whiteboard" || resp.DailyUsed != 1 {
+		t.Fatalf("unexpected resp: %+v", resp)
+	}
+
+	// 2. Set quota to 1
+	s.SetAIWhiteboardOptions(true, 1)
+	// Already used 1, so next call must fail with ErrQuotaExceeded
+	_, err = s.DirectAICall(ctx, user, domain.AIDirectRequest{
+		AIAccountID: "board-ai",
+		Messages: []domain.AIDirectMessage{
+			{Role: "user", Content: "Another call"},
+		},
+	})
+	if !errors.Is(err, ErrQuotaExceeded) {
+		t.Fatalf("expected ErrQuotaExceeded, got %v", err)
+	}
+
+	// 3. Disabled whiteboard
+	s.SetAIWhiteboardOptions(false, 0)
+	_, err = s.DirectAICall(ctx, user, domain.AIDirectRequest{
+		AIAccountID: "board-ai",
+		Messages: []domain.AIDirectMessage{
+			{Role: "user", Content: "Call when disabled"},
+		},
+	})
+	if !errors.Is(err, ErrForbidden) {
+		t.Fatalf("expected ErrForbidden when disabled, got %v", err)
+	}
+
+	// 4. Admin summary
+	summary, err := s.GetAIDailyUsageSummary(ctx, "admin", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.TotalCount != 1 || len(summary.UserUsage) != 1 || summary.UserUsage[0].UserID != user {
+		t.Fatalf("unexpected summary: %+v", summary)
+	}
+}
+

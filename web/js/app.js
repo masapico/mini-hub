@@ -996,6 +996,7 @@ function realtime() {
 }
 $("logout").onclick = async () => {
     try {
+        window.resetAIWhiteboard?.();
         await api("/api/auth/logout", { method: "POST" });
         location.replace(Minihub.url("/login"));
     } catch (error) {
@@ -2224,6 +2225,7 @@ async function reloadAIAccounts() {
     });
     $("aiButton")?.classList.toggle("hidden", !S.aiAccounts.length);
     $("threadAIButton")?.classList.toggle("hidden", !S.aiAccounts.length);
+    window.updateAIWhiteboardAccounts?.();
     return S.aiAccounts;
 }
 

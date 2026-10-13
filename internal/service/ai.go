@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -751,3 +752,219 @@ func (s *Service) DeleteAIAccount(ctx context.Context, actorID, id string) error
 	}
 	return s.ReloadAIAccounts(ctx)
 }
+
+func (s *Service) GetAIQuota(ctx context.Context, userID string) (*domain.AIQuotaResponse, error) {
+	if _, err := s.user(ctx, userID); err != nil {
+		return nil, err
+	}
+	today := time.Now().Format("2006-01-02")
+	used, err := s.storage.GetAIDailyUsage(ctx, userID, today)
+	if err != nil {
+		return nil, err
+	}
+	return &domain.AIQuotaResponse{
+		DailyQuota: s.aiDailyQuota,
+		DailyUsed:  used,
+		Enabled:    s.aiWhiteboardEnabled,
+	}, nil
+}
+
+func (s *Service) GetAIDailyUsageSummary(ctx context.Context, actorID, date string) (*domain.AIDailyUsageSummary, error) {
+	actor, err := s.user(ctx, actorID)
+	if err != nil {
+		return nil, err
+	}
+	if actor.Role != domain.RoleAdmin {
+		return nil, ErrForbidden
+	}
+	if strings.TrimSpace(date) == "" {
+		date = time.Now().Format("2006-01-02")
+	}
+	usageMap, err := s.storage.ListAIDailyUsage(ctx, date)
+	if err != nil {
+		return nil, err
+	}
+	users, err := s.storage.ListUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nameMap := make(map[string]string)
+	for _, u := range users {
+		nameMap[u.ID] = u.Name
+	}
+	entries := make([]domain.AIDailyUsageEntry, 0, len(usageMap))
+	total := 0
+	for uid, count := range usageMap {
+		total += count
+		name := nameMap[uid]
+		if name == "" {
+			name = uid
+		}
+		entries = append(entries, domain.AIDailyUsageEntry{
+			UserID:   uid,
+			UserName: name,
+			Count:    count,
+		})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Count == entries[j].Count {
+			return entries[i].UserID < entries[j].UserID
+		}
+		return entries[i].Count > entries[j].Count
+	})
+	return &domain.AIDailyUsageSummary{
+		Date:       date,
+		TotalCount: total,
+		UserUsage:  entries,
+	}, nil
+}
+
+func (s *Service) DirectAICall(ctx context.Context, userID string, req domain.AIDirectRequest) (*domain.AIDirectResponse, error) {
+	if !s.aiWhiteboardEnabled {
+		return nil, ErrForbidden
+	}
+	u, err := s.user(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if s.ai == nil {
+		return nil, ErrAIUnavailable
+	}
+	d := s.ai
+	var target *aiEndpoint
+	for _, a := range d.getAccounts() {
+		if a.ID == req.AIAccountID && a.Enabled {
+			copyAccount := a
+			target = &copyAccount
+			break
+		}
+	}
+	if target == nil {
+		return nil, ErrNotFound
+	}
+	if !canUseAI(u, target.AIAccount) {
+		return nil, ErrForbidden
+	}
+	if len(req.Messages) == 0 {
+		return nil, ErrInvalid
+	}
+
+	today := time.Now().Format("2006-01-02")
+	used, err := s.storage.GetAIDailyUsage(ctx, userID, today)
+	if err != nil {
+		return nil, err
+	}
+	if s.aiDailyQuota > 0 && used >= s.aiDailyQuota {
+		return nil, ErrQuotaExceeded
+	}
+
+	// Sliding window: up to the last 10 messages
+	msgs := req.Messages
+	if len(msgs) > 10 {
+		msgs = msgs[len(msgs)-10:]
+	}
+
+	p := aiRequest{
+		Model:       target.Model,
+		Messages:    []aiContextMessage{},
+		Temperature: target.Temperature,
+		TopP:        target.TopP,
+		MaxTokens:   target.MaxTokens,
+	}
+	if strings.TrimSpace(target.SystemPrompt) != "" {
+		p.Messages = append(p.Messages, aiContextMessage{Role: "system", Content: target.SystemPrompt})
+	}
+
+	maxBytes := aiMaxContextBytes
+	if len(req.Attachments) > 0 {
+		maxBytes = aiMaxAttachmentRequestBytes
+	}
+
+	for i, m := range msgs {
+		role := m.Role
+		if role != "assistant" && role != "system" {
+			role = "user"
+		}
+		isLast := (i == len(msgs)-1)
+		if isLast && len(req.Attachments) > 0 {
+			parts := []aiContentPart{
+				{Type: "text", Text: m.Content},
+			}
+			for _, att := range req.Attachments {
+				parts = append(parts, aiContentPart{
+					Type: "file",
+					Name: att.Name,
+					Data: att.Data,
+				})
+			}
+			p.Messages = append(p.Messages, aiContextMessage{Role: role, Content: parts})
+		} else {
+			p.Messages = append(p.Messages, aiContextMessage{Role: role, Content: m.Content})
+		}
+	}
+
+	body, err := json.Marshal(p)
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > maxBytes {
+		return nil, errors.New("request exceeds maximum size")
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, target.RequestTimeout())
+	defer cancel()
+
+	httpReq, err := http.NewRequestWithContext(reqCtx, http.MethodPost, target.URL, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "application/json")
+	if target.token != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+target.token)
+	}
+
+	resp, err := d.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("AI request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	media, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	if resp.StatusCode != http.StatusOK || media != "application/json" {
+		return nil, fmt.Errorf("AI response status %d", resp.StatusCode)
+	}
+
+	b, err := io.ReadAll(io.LimitReader(resp.Body, aiMaxContextBytes+1))
+	if err != nil {
+		return nil, err
+	}
+
+	var reply struct {
+		Choices []struct {
+			Message struct {
+				Content *string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(b, &reply); err != nil || len(reply.Choices) == 0 || reply.Choices[0].Message.Content == nil {
+		return nil, errors.New("invalid AI response format")
+	}
+
+	answer := *reply.Choices[0].Message.Content
+	if len(answer) > MaxMessageBytes || strings.TrimSpace(answer) == "" {
+		return nil, errors.New("AI reply empty or exceeds maximum size")
+	}
+
+	newUsed, err := s.storage.IncrementAIDailyUsage(ctx, userID, today)
+	if err != nil {
+		newUsed = used + 1
+	}
+
+	return &domain.AIDirectResponse{
+		Reply:      answer,
+		DailyQuota: s.aiDailyQuota,
+		DailyUsed:  newUsed,
+	}, nil
+}
+

@@ -168,3 +168,62 @@ func TestAIAccountsAdminEndpoints(t *testing.T) {
 		t.Fatal("expected account to be deleted from store")
 	}
 }
+
+func TestAIWhiteboardEndpoints(t *testing.T) {
+	store, err := storetest.New(t, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := store.SaveUser(ctx, &domain.User{ID: "admin", Name: "Admin", Enabled: true, Role: domain.RoleAdmin}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveUser(ctx, &domain.User{ID: "user", Name: "User", Enabled: true, Role: domain.RoleUser}); err != nil {
+		t.Fatal(err)
+	}
+	svc := service.New(store)
+	svc.SetAIWhiteboardOptions(true, 1)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	if err := svc.StartAI(ctx, logger); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(svc.CloseAI)
+	handler := httpapi.New(svc, httpapi.HeaderAuthenticator{}, logger)
+
+	// 1. Quota endpoint
+	qRespAnon := request(t, handler, http.MethodGet, "/api/ai/quota", "", nil)
+	if qRespAnon.Code != 401 {
+		t.Fatalf("anon quota code: %d", qRespAnon.Code)
+	}
+	qResp := request(t, handler, http.MethodGet, "/api/ai/quota", "user", nil)
+	if qResp.Code != 200 || !strings.Contains(qResp.Body.String(), `"dailyQuota":1`) {
+		t.Fatalf("user quota: %d %s", qResp.Code, qResp.Body.String())
+	}
+
+	// 2. Admin usage summary endpoint
+	uRespForbidden := request(t, handler, http.MethodGet, "/api/admin/ai/usage", "user", nil)
+	if uRespForbidden.Code != 403 {
+		t.Fatalf("user accessing admin usage: %d", uRespForbidden.Code)
+	}
+	uRespAdmin := request(t, handler, http.MethodGet, "/api/admin/ai/usage", "admin", nil)
+	if uRespAdmin.Code != 200 || !strings.Contains(uRespAdmin.Body.String(), `"totalCount":0`) {
+		t.Fatalf("admin usage: %d %s", uRespAdmin.Code, uRespAdmin.Body.String())
+	}
+
+	// 3. Direct AI endpoint validation
+	dMethod := request(t, handler, http.MethodGet, "/api/ai/direct", "user", nil)
+	if dMethod.Code != 405 {
+		t.Fatalf("GET /api/ai/direct expected 405, got %d", dMethod.Code)
+	}
+
+	dMissing := request(t, handler, http.MethodPost, "/api/ai/direct", "user", map[string]any{
+		"aiAccountId": "non-existent",
+		"messages": []map[string]string{
+			{"role": "user", "content": "hi"},
+		},
+	})
+	if dMissing.Code != 404 {
+		t.Fatalf("missing AI expected 404, got %d %s", dMissing.Code, dMissing.Body.String())
+	}
+}
+
