@@ -225,25 +225,6 @@ erDiagram
 
 メッセージの添付ファイルメタデータ（`messages.attachments` 列）には、ファイルID・ファイル名・サイズのみがJSON配列として保存され、サーバーホスト内には実体ファイルは保持されません。
 
-### 旧file方式の構成（移行元データ）
-
-`minihub migrate -to sqlite` で移行可能な旧file方式のディレクトリ構造は以下のとおりです。
-
-```mermaid
-flowchart TB
-    ROOT["dataDir/"]
-    ROOT --> MARK["storage.json / .minihub.lock"]
-    ROOT --> META["users/*.json<br/>groups/*.json<br/>sessions/*.json"]
-    ROOT --> CH["channels/{channelId}/"]
-    CH --> CM["meta.json"]
-    CH --> MSG["messages/YYYY-MM-DD.jsonl"]
-    CH --> REACT["reactions/YYYY-MM-DD.jsonl"]
-    ROOT --> STATE["state/{userId}.json<br/>本流・スレッド既読、メンション確認"]
-    ROOT --> POLL["polls/{pollId}/<br/>meta.json / responses.jsonl"]
-    ROOT --> SCH["schedules/{scheduleId}/<br/>meta.json / responses.jsonl"]
-    ROOT --> WD["withdrawals/{channelId}/{kind}/{targetId}.json"]
-```
-
 ## AIアカウントとAI投稿
 
 AIアカウント設定は、組み込みSQLiteのスキーマv6（`ai_accounts`テーブル）にJSONデータとして永続化され、設定されたグループ情報は`ai_account_groups`ビューで展開されます。

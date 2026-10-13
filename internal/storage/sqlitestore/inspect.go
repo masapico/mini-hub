@@ -1,7 +1,6 @@
 package sqlitestore
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"net/url"
@@ -56,13 +55,4 @@ func OpenExisting(path string) (*Store, error) {
 		return nil, err
 	}
 	return Open(path)
-}
-func VerifyImportFile(ctx context.Context, path string) (err error) {
-	db, err := inspect(path)
-	if err != nil {
-		return err
-	}
-	defer func() { err = errors.Join(err, db.Close()) }()
-	s := &Store{read: db, write: db}
-	return s.VerifyMigration(ctx)
 }

@@ -8,25 +8,13 @@ import (
 	"testing"
 )
 
-func TestStorageSelection(t *testing.T) {
-	for _, kind := range []string{"sqlite", "file", "", "mysql"} {
-		t.Run(fmt.Sprintf("type_%s", kind), func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "config.json")
-			if err := os.WriteFile(path, []byte(fmt.Sprintf(`{"version":1,"storage":{"type":%q}}`, kind)), 0600); err != nil {
-				t.Fatal(err)
-			}
-			cfg, _, err := Load(path, true)
-			if kind == "sqlite" {
-				if err != nil || cfg.Storage.Type != kind {
-					t.Fatal(cfg, err)
-				}
-			} else if err == nil {
-				t.Fatal("invalid type accepted")
-			}
-		})
+func TestStorageFieldRejected(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"storage":{"type":"sqlite"}}`), 0600); err != nil {
+		t.Fatal(err)
 	}
-	if Defaults().Storage.Type != "sqlite" {
-		t.Fatal("default storage type must be sqlite")
+	if _, _, err := Load(path, true); err == nil {
+		t.Fatal("config with storage field should be rejected as unknown field")
 	}
 }
 

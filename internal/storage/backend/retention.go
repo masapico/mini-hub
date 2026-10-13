@@ -16,7 +16,7 @@ import (
 const sqliteRetentionJournal = ".retention-sqlite-pending.json"
 
 // Prune runs only while holding the same data-directory lock as the server.
-func Prune(ctx context.Context, root, kind string, cutoff time.Time, apply bool) (report storage.RetentionReport, err error) {
+func Prune(ctx context.Context, root string, cutoff time.Time, apply bool) (report storage.RetentionReport, err error) {
 	lock, err := Lock(root)
 	if err != nil {
 		return report, err
@@ -26,8 +26,8 @@ func Prune(ctx context.Context, root, kind string, cutoff time.Time, apply bool)
 	if err != nil {
 		return report, err
 	}
-	if kind != "sqlite" || (marked != "" && marked != "sqlite") {
-		return report, errors.New("retention is only supported for sqlite storage")
+	if marked != "" && marked != "sqlite" {
+		return report, fmt.Errorf("unsupported storage marker type %q", marked)
 	}
 	if marked != "sqlite" {
 		return report, errors.New("SQLite storage marker is required")
@@ -108,17 +108,17 @@ func Prune(ctx context.Context, root, kind string, cutoff time.Time, apply bool)
 		err = os.Remove(path)
 	}
 	if err == nil && apply && report.Messages > 0 {
-		err = recordRetention(root, kind, report)
+		err = recordRetention(root, report)
 	}
 	return report, err
 }
 
-func recordRetention(root, kind string, report storage.RetentionReport) error {
+func recordRetention(root string, report storage.RetentionReport) error {
 	b, err := json.Marshal(struct {
 		At      time.Time `json:"at"`
 		Storage string    `json:"storage"`
 		storage.RetentionReport
-	}{time.Now().UTC(), kind, report})
+	}{time.Now().UTC(), "sqlite", report})
 	if err != nil {
 		return err
 	}

@@ -2,9 +2,9 @@
 
 ## Goの基本チェック
 
-AI連携は`go test ./internal/service ./internal/config ./internal/httpapi ./internal/storage/backend ./internal/storage/sqlitestore -run AI`でOpenAI互換Chat CompletionsのモックAPI、モデル名・認証・システム指示、履歴のロールと上限、不正・空の回答、タイムアウト、待機上限、停止、保存・移行・復元を検証します。共通試験は`MINIHUB_TEST_STORAGE=sqlite`でも実行してください。
+AI連携は`go test ./internal/service ./internal/config ./internal/httpapi ./internal/storage/backend ./internal/storage/sqlitestore -run AI`でOpenAI互換Chat CompletionsのモックAPI、モデル名・認証・システム指示、履歴のロールと上限、不正・空の回答、タイムアウト、待機上限、停止、保存・復元を検証します。
 
-`node tests/ai-browser.cjs <実行ファイル>`はPlaywrightとChromium系ブラウザで、独立した一時サーバー・OpenAI互換のモックAIを使い、ロボットボタン、候補検索・キーボード挿入、下書き復元、通常投稿と返信の履歴、回答表示、狭い画面を確認します。`--sqlite`でSQLiteと`/hub`配備、`--disabled`でAI未設定時の非表示を確認します。`NODE_PATH`と`BROWSER_PATH`は既存ブラウザ試験と同様です。file方式の有効モードに`--update-screenshot`を付けると`docs/images/ai.png`も更新します。既存データは使用しません。
+`node tests/ai-browser.cjs <実行ファイル>`はPlaywrightとChromium系ブラウザで、独立した一時サーバー・OpenAI互換のモックAIを使い、ロボットボタン、候補検索・キーボード挿入、下書き復元、通常投稿と返信の履歴、回答表示、狭い画面を確認します。`/hub`配備、`--disabled`でAI未設定時の非表示を確認します。`NODE_PATH`と`BROWSER_PATH`は既存ブラウザ試験と同様です。`--update-screenshot`を付けると`docs/images/ai.png`も更新します。既存データは使用しません。
 
 ```bash
 go test ./...
@@ -26,7 +26,7 @@ $env:NODE_PATH = (Resolve-Path '.tmp/ui-review/node_modules').Path
 node tests/base-path-browser.cjs .tmp/minihub-base-path.exe
 ```
 
-ドメイン直下と `/hub` をfile方式、`/apps/chat` をSQLite方式・CLIによる設定上書きで確認します。ログイン後の詳細画面への復帰、予定調整の作成・編集・公開・一覧の期間切替と戻る操作、チャット内リンク・別タブでの作成、Cookieの送信範囲とログアウト、静的アセット、リアルタイム投稿、WebSocket再接続での取り逃し取得を検証します。予定調整のシナリオには専用の一時データだけを使用し、終了時に削除します。
+ドメイン直下、`/hub`、および `/apps/chat`（CLIによる設定上書き）で確認します。ログイン後の詳細画面への復帰、予定調整の作成・編集・公開・一覧の期間切替と戻る操作、チャット内リンク・別タブでの作成、Cookieの送信範囲とログアウト、静的アセット、リアルタイム投稿、WebSocket再接続での取り逃し取得を検証します。予定調整のシナリオには専用の一時データだけを使用し、終了時に削除します。
 
 ## ブラウザ検証
 
@@ -99,9 +99,9 @@ THREAD_CONNECTION_PROFILE=1 go test ./internal/realtime -run TestThreadConnectio
 
 現在のリアクションボタンは「了解」「完了」「確認中」「感謝」の4種類です。API／保存データのキーは順に `ack`、`done`、`eyes`、`thanks` です。`eyes` は互換性のためのキー名で、画面には「確認中」の砂時計アイコンを表示します。返信ブラウザテストは `ack` の追加後、リアクション数と返信ボタンの配置を確認します。
 
-## SQLite試験と移行試験
+## SQLite試験
 
-通常の`go test ./...`はSQLite単一構成で、採番・クラッシュ復旧試験、旧file形式からの移行・バックアップ復元試験を実行します。
+通常の`go test ./...`はSQLite単一構成で、採番・クラッシュ復旧試験、バックアップ復元試験を実行します。
 
 ```powershell
 go test ./...
@@ -121,7 +121,7 @@ go test ./internal/realtime -run '^TestThreadConnectionProfile$' -count=1 -v -ti
 Remove-Item Env:THREAD_CONNECTION_PROFILE,Env:THREAD_MIXED_PROFILE
 ```
 
-大量履歴は従来と同じ分布（20投稿者、30%返信、10件ごとの元発言へ3返信）です。SQLiteは生成後に接続を閉じて開き直し、永続索引による初回ページ取得を測ります。fileはJSONLから初回メモリ索引を構築します。両者ともOSキャッシュが暖まった開発環境での測定です。SQLiteのGoヒープ差分はDBのページキャッシュやプロセスRSS全体の測定ではありません。
+大量履歴は従来と同じ分布（20投稿者、30%返信、10件ごとの元発言へ3返信）です。SQLiteは生成後に接続を閉じて開き直し、永続索引による初回ページ取得を測ります。OSキャッシュが暖まった開発環境での測定です。SQLiteのGoヒープ差分はDBのページキャッシュやプロセスRSS全体の測定ではありません。
 
 混在試験は500接続・10返信／秒・合計600返信に加え、1秒ごとに10人のスレッド既読を並行更新し、リアクションを1件追加します。合計600件の既読更新と60件のリアクション、600件の返信通知の順序と全受信を確認します。HTTPの500ブラウザ同時再取得や数百万件の履歴との組み合わせを模擬したものではありません。
 

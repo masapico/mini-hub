@@ -58,7 +58,7 @@ func retention(args []string) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	report, err := backend.Prune(ctx, *data, cfg.Storage.Type, cutoff, *apply)
+	report, err := backend.Prune(ctx, *data, cutoff, *apply)
 	if err != nil {
 		return fmt.Errorf("retention cutoff %s: %w", cutoff.Format("2006-01-02"), err)
 	}

@@ -1,6 +1,5 @@
 {
   "version": 1,
-  "storage": { "type": "sqlite" },
   "server": {
     "listenAddress": "127.0.0.1:8080",
     "basePath": "",

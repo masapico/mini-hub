@@ -32,7 +32,7 @@ const {spawn} = require('node:child_process');
     await new Promise(resolve => reservation.close(resolve));
     const basePath = sqlite ? '/hub' : '', base = `http://127.0.0.1:${port}${basePath}`;
     const config = path.join(temp, 'minihub.json');
-    fs.writeFileSync(config, JSON.stringify({version: 1, storage: {type: sqlite ? 'sqlite' : 'file'},
+    fs.writeFileSync(config, JSON.stringify({version: 1,
         server: {basePath, dataDir: path.join(temp, 'data')},
         aiAccounts: disabled ? [] : [{id: 'helper', name: '社内アシスタント', url: `http://127.0.0.1:${ai.address().port}/v1/chat/completions`, model: 'local-model'}],
     }), {mode: 0o600});

@@ -13,7 +13,6 @@ import (
 )
 
 type Config struct {
-	Storage       Storage       `json:"storage"`
 	Version       int           `json:"version"`
 	Server        Server        `json:"server"`
 	UI            UI            `json:"ui"`
@@ -22,9 +21,6 @@ type Config struct {
 	Retention     Retention     `json:"retention"`
 	Logging       Logging       `json:"logging"`
 	InitialAdmin  *InitialAdmin `json:"initialAdmin,omitempty"`
-}
-type Storage struct {
-	Type string `json:"type"`
 }
 type UI struct {
 	WorkspaceTitle string `json:"workspaceTitle"`
@@ -67,7 +63,6 @@ const DefaultFilename = "minihub.json"
 
 func Defaults() Config {
 	return Config{
-		Storage: Storage{Type: "sqlite"},
 		Version: 1,
 		Server:  Server{ListenAddress: "127.0.0.1:8080", DataDir: "data", SessionTTL: "12h"},
 		UI: UI{
@@ -100,9 +95,6 @@ func Load(path string, explicit bool) (Config, bool, error) {
 	}
 	if cfg.Version != 1 {
 		return cfg, false, fmt.Errorf("unsupported config version %d", cfg.Version)
-	}
-	if cfg.Storage.Type != "sqlite" {
-		return cfg, false, errors.New("storage.type must be sqlite; file storage has been discontinued (use minihub migrate -to sqlite)")
 	}
 	cfg.Server.BasePath, err = NormalizeBasePath(cfg.Server.BasePath)
 	if err != nil {

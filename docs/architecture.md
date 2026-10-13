@@ -17,7 +17,7 @@ flowchart LR
     U <-->|"HTTP / WebSocket"| APP
 ```
 
-永続化は組み込みSQLiteを使用します。外部DBサーバーはありません。データディレクトリのプロセス排他ロック（`.minihub.lock`）を取得し、安全に動作します。旧バージョンのfile方式データが存在する場合は、`minihub migrate -to sqlite` で移行します。
+永続化は組み込みSQLiteを使用します。外部DBサーバーはありません。データディレクトリのプロセス排他ロック（`.minihub.lock`）を取得し、安全に動作します。
 
 ## コンポーネントと責務
 
@@ -29,7 +29,7 @@ flowchart LR
     SVC["service<br/>権限・業務ルール"]
     HUB["realtime<br/>接続・配信・在席"]
     STORE["storage.Storage<br/>永続化契約"]
-    BACK["storage/backend<br/>SQLiteオープン・排他ロック・移行"]
+    BACK["storage/backend<br/>SQLiteオープン・排他ロック"]
     SQL["sqlitestore"]
     MODEL["domain<br/>保存モデル"]
 

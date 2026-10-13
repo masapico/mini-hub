@@ -164,22 +164,3 @@ flowchart TD
 
 投稿本文と投票・予定の元レコードは書き換えず、取消の状態と履歴を別に持ちます。投票・予定の告知投稿はそれぞれの取消APIから扱い、通常メッセージの取消APIでは扱いません。
 
-## 停止中の file → SQLite 移行
-
-```mermaid
-flowchart TD
-    A["サービスを停止"] --> B["minihub migrate -to sqlite を実行"]
-    B --> C["dataDirの排他ロックを取得"]
-    C --> D["fileデータを変更せず順次読み込み"]
-    D --> E["一時SQLite DBへID・seq・時刻・履歴を移す"]
-    E --> F["件数・ダイジェスト・参照・DB整合性を検証"]
-    F --> G{"検証成功か"}
-    G -->|いいえ| X["移行失敗・file方式を維持"]
-    G -->|はい| H["正式なminuhub.dbとして確定"]
-    H --> I["storage.jsonをsqliteへ更新"]
-    I --> J["設定のstorage.typeをsqliteへ変更して起動"]
-    H -.->|"確定後に中断"| R["再実行でDBの完了情報を検証し、識別情報を修復"]
-    R --> I
-```
-
-`-dry-run` は同じ検証を一時DBで行い、方式を切り替えません。移行元のfileデータは残ります。復旧やバックアップの詳細は [DESIGN.md](../DESIGN.md) の「SQLite保存方式」を参照してください。

@@ -5,11 +5,11 @@
 | 資料 | 内容 |
 | --- | --- |
 | [APIリファレンス](api.md) | 認証、curl使用例、エンドポイント、ページング、リアルタイムイベント |
-| [アーキテクチャ](architecture.md) | 配置、コンポーネント、認証・認可、ストレージ選択 |
-| [データモデル](data-model.md) | 論理ER図、SQLiteの保存構造、file方式の配置 |
-| [処理フロー](workflows.md) | 投稿、既読、再接続、管理、投票・予定、移行 |
+| [アーキテクチャ](architecture.md) | 配置、コンポーネント、認証・認可、ストレージ構成 |
+| [データモデル](data-model.md) | 論理ER図、SQLiteの保存構造 |
+| [処理フロー](workflows.md) | 投稿、既読、再接続、管理、投票・予定 |
 | [AI連携](ai.md) | AIアカウント、送信する履歴、外部APIのHTTP契約 |
-| [保存方式とSQLiteへの移行](sqlite.md) | 保存方式の選択、停止中の移行、エラー時の復旧、バックアップ |
+| [SQLite保存方式](sqlite.md) | SQLite保存方式、エラー時の復旧、バックアップ |
 | [投稿の物理削除](retention-proposal.md) | 削除範囲、停止中の実行手順、復旧 |
 | [通信負荷の見積もり](network-load.md) | 500同時接続時の概算、配信・HTTP取得の負荷、導入前の実測 |
 | [リリースビルドと手動公開](releases.md) | 4種の配布物、ビルドスクリプト、検証、GitHub Releasesへの登録 |
@@ -26,7 +26,7 @@
 | ユーザー向け操作マニュアル | [Markdown](user-manual.md) | [HTML](../docs_html/user-manual.html) |
 | 管理者向け操作マニュアル | [Markdown](admin-manual.md) | [HTML](../docs_html/admin-manual.html) |
 | ブラウザAPIを使ったOS通知の設定 | [Markdown](browser-notifications.md) | [HTML](../docs_html/browser-notifications.html) |
-| 保存方式とSQLiteへの移行 | [Markdown](sqlite.md) | [HTML](../docs_html/sqlite.html) |
+| 保存方式 | [Markdown](sqlite.md) | [HTML](../docs_html/sqlite.html) |
 | AIアカウントと外部API連携 | [Markdown](ai.md) | [HTML](../docs_html/ai.html) |
 | 投稿の物理削除 | [Markdown](retention-proposal.md) | [HTML](../docs_html/retention-proposal.html) |
 

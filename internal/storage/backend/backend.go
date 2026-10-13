@@ -61,13 +61,13 @@ func readMarker(root string) (string, error) {
 	if err = json.Unmarshal(b, &m); err != nil {
 		return "", err
 	}
-	if m.Version != 1 || (m.Type != "file" && m.Type != "sqlite") {
+	if m.Version != 1 || m.Type != "sqlite" {
 		return "", errors.New("unsupported storage marker")
 	}
 	return m.Type, nil
 }
-func writeMarker(root, kind string) error {
-	b, err := json.Marshal(marker{1, kind})
+func writeMarker(root string) error {
+	b, err := json.Marshal(marker{1, "sqlite"})
 	if err != nil {
 		return err
 	}
@@ -89,25 +89,7 @@ func writeMarker(root, kind string) error {
 	}
 	return publishFile(name, filepath.Join(root, markerName), true)
 }
-func fileData(root string) (bool, error) {
-	for _, dir := range []string{"users", "groups", "channels", "state", "sessions", "schedules"} {
-		entries, err := os.ReadDir(filepath.Join(root, dir))
-		if errors.Is(err, os.ErrNotExist) {
-			continue
-		}
-		if err != nil {
-			return false, err
-		}
-		if len(entries) > 0 {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-func Open(root, kind string) (_ *Handle, err error) {
-	if kind != "sqlite" {
-		return nil, errors.New("storage.type must be sqlite; file storage has been discontinued (run minihub migrate -to sqlite)")
-	}
+func Open(root string) (_ *Handle, err error) {
 	l, err := Lock(root)
 	if err != nil {
 		return nil, err
@@ -132,26 +114,14 @@ func Open(root, kind string) (_ *Handle, err error) {
 	if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
 		return nil, statErr
 	}
-	if mark == "file" {
-		return nil, errors.New("storage.json indicates file storage; run minihub migrate -to sqlite")
-	}
 	if mark != "" && mark != "sqlite" {
-		return nil, fmt.Errorf("storage.type=%s does not match data directory (%s)", kind, mark)
+		return nil, fmt.Errorf("unsupported storage marker type %q", mark)
 	}
 	if mark == "sqlite" && !dbExists {
 		return nil, errors.New("SQLite database is missing; refusing to initialize an empty replacement")
 	}
-	if mark == "" {
-		has, e := fileData(root)
-		if e != nil {
-			return nil, e
-		}
-		if has {
-			return nil, errors.New("file data exists; run migrate -to sqlite before changing storage.type")
-		}
-		if dbExists {
-			return nil, errors.New("unmarked SQLite database; restore its storage.json or complete migration")
-		}
+	if mark == "" && dbExists {
+		return nil, errors.New("unmarked SQLite database; restore its storage.json")
 	}
 	var s *sqlitestore.Store
 	if dbExists {
@@ -165,7 +135,7 @@ func Open(root, kind string) (_ *Handle, err error) {
 	h.Storage = s
 	h.close = s.Close
 	if mark == "" {
-		if err = writeMarker(root, "sqlite"); err != nil {
+		if err = writeMarker(root); err != nil {
 			return nil, err
 		}
 	}

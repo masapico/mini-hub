@@ -22,13 +22,13 @@
 minihub retention -config minihub.json -policy -apply
 minihub retention -config minihub.json -before 2025-01-01
 minihub retention -config minihub.json -before 2025-01-01 -apply</code></pre>
-<p><code>-apply</code> を省くと対象件数だけをJSONで表示します。両方式とも、日本時間で基準日の00:00より前に作成された投稿を削除し、基準日当日の投稿は残します。出力の <code>messages</code> は返信と告知を含む削除投稿数、<code>polls</code> と <code>schedules</code> は削除する本体数です。設定変更はサービスの再起動後に反映されますが、削除コマンドは実行時に設定を読みます。</p>
+<p><code>-apply</code> を省くと対象件数だけをJSONで表示します。日本時間で基準日の00:00より前に作成された投稿を削除し、基準日当日の投稿は残します。出力の <code>messages</code> は返信と告知を含む削除投稿数、<code>polls</code> と <code>schedules</code> は削除する本体数です。設定変更はサービスの再起動後に反映されますが、削除コマンドは実行時に設定を読みます。</p>
 <h2 id="section-3">対象と保存データ</h2>
 <ul>
 <li>親投稿が対象なら、そのスレッドの新しい返信も削除します。親が残る場合は期限に達した返信だけを削除します。</li>
 <li>投票・予定の告知が対象なら、その本体、回答、ほかの告知も削除します。対象投稿のリアクション、メンション確認、取り消し履歴も削除します。</li>
 <li>通常の既読位置は後退させず、未読件数は残った投稿から求めます。削除した親のスレッド既読状態は消します。投稿IDとチャンネル内連番は再利用しません。</li>
-<li>file方式は日付別JSONLを安全に再構成し、<code>channels/&lt;id&gt;/sequence.json</code> に採番上限を保持します。このファイルはバックアップとfile→SQLite移行にも含めます。SQLite方式は関連行をトランザクションで消し、WALを整理して <code>VACUUM</code> で領域を回収します。</li>
+<li>SQLite方式は関連行をトランザクションで消し、WALを整理して <code>VACUUM</code> で領域を回収します。</li>
 </ul>
 <h2 id="section-4">実行と復旧</h2>
 <ol>

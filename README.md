@@ -133,7 +133,7 @@ macOS／Linux：
 | --- | --- |
 | 導入・設定・バックアップ | [管理者マニュアル](docs/admin-manual.md)（[HTML版](docs_html/admin-manual.html)） |
 | チャットの使い方 | [ユーザーマニュアル](docs/user-manual.md)（[HTML版](docs_html/user-manual.html)） |
-| 保存方式の選択・移行 | [SQLite移行手順](docs/sqlite.md)（[HTML版](docs_html/sqlite.html)） |
+| 保存方式・バックアップ | [SQLite保存方式](docs/sqlite.md)（[HTML版](docs_html/sqlite.html)） |
 | APIを使う | [APIリファレンス](docs/api.md) |
 | 設計・開発・通信負荷 | [開発・保守資料一覧](docs/README.md) ／ [設計仕様](DESIGN.md) |
 | リリースビルド・手動公開 | [リリース手順](docs/releases.md) |

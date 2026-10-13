@@ -18,7 +18,6 @@
 <li><code>minihub -config minihub.json</code>で起動し、設定した管理者IDとパスワードでログインします。</li>
 <li>初期管理者の作成を確認したら、実設定ファイルから<code>initialAdmin</code>ブロックを削除します。</li>
 </ol>
-<p><code>storage.type</code>は<code>file</code>または<code>sqlite</code>です。省略時は<code>file</code>で、SQLiteもデータディレクトリ内に保存します。保存方式を変更する際は、設定値だけを切り替えず、停止中に<a href="sqlite.html">保存方式の選択・移行手順</a>を実行してください。</p>
 <p>HTTP／HTTPSは設定で一方を選びます。<code>server.tls.enabled</code>を省略するか<code>false</code>にするとHTTPです。HTTPSでは<code>true</code>にし、<code>server.tls.certFile</code>と<code>server.tls.keyFile</code>へPEM形式の証明書と秘密鍵のパスを指定します。相対パスは設定ファイルの所在ディレクトリが基準です。ポートは<code>server.listenAddress</code>で指定します。HTTPSではSecure Cookieが自動で有効になります。リバースプロキシでHTTPSを終端する場合はSecure Cookieを明示的に有効にします。証明書の信頼設定、秘密鍵のアクセス権、証明書更新の手順は<a href="#https">HTTP／HTTPSの選択</a>を参照してください。証明書や秘密鍵が不正なら起動を中止します。</p>
 <p><code>notifications.osNotificationsEnabled</code>は省略時<code>true</code>です。<code>false</code>ではOS通知ボタンが無効になり、管理者設定による利用不可を表示します。利用者が以前ONにしていてもOS通知を停止します。アプリ内通知と未読表示は継続します。<code>true</code>でも利用者自身のON操作とブラウザの許可が必要です。OS通知の接続元と管理対象Edgeの設定は<a href="browser-notifications.html">ブラウザAPIを使ったOS通知の設定</a>を参照してください。設定変更と証明書更新後はサービスを再起動し、開いている画面を再読み込みします。</p>
 <h2 id="section-3">ビルドと初回起動</h2>
@@ -127,7 +126,7 @@ location ^~ /hub/ {
 }</code></pre>
 <p><code>server.tls</code> の省略、または <code>enabled: false</code> では従来どおりHTTPで待ち受けます。HTTPとHTTPSのどちらか一方を選択し、同時待ち受けやHTTPからの自動リダイレクトは行いません。ポートは <code>listenAddress</code>（または <code>-addr</code>）で明示します。HTTPS例のURLは <code>https://&lt;サーバー名&gt;:8443/login</code> です。最低TLSバージョンは1.2です。</p>
 <p>証明書と秘密鍵はPEM形式で用意します。証明書ファイルには必要な中間証明書も含めてください。相対パスは設定ファイルの所在ディレクトリを基準に解決されます。証明書の名前が利用するサーバー名と一致し、有効期間内であり、組織のCAが利用者端末で信頼されていることを確認してください。秘密鍵はサービスの実行アカウントと管理者だけが読めるように権限を制限します。</p>
-<p>証明書・秘密鍵の欠落、読み取り失敗、形式不正、組み合わせ不一致では起動を中止し、HTTPには切り替えません。証明書を自動発行・自動更新する機能はありません。設定変更や証明書更新後はサービスを再起動し、開いている画面を再読み込みしてください。証明書が利用できなくても停止・移行・保存期間の管理コマンドは実行できます。</p>
+<p>証明書・秘密鍵の欠落、読み取り失敗、形式不正、組み合わせ不一致では起動を中止し、HTTPには切り替えません。証明書を自動発行・自動更新する機能はありません。設定変更や証明書更新後はサービスを再起動し、開いている画面を再読み込みしてください。証明書が利用できなくても停止・保存期間の管理コマンドは実行できます。</p>
 <p>minihub自身がHTTPSで待ち受ける場合は、セッションCookieの <code>Secure</code> 属性を必ず有効にします。<code>secureCookie: false</code> や <code>-secure-cookie=false</code> でも無効にはできません。リバースプロキシでHTTPSを終端し、minihubがHTTPで待ち受ける場合は、従来どおり <code>server.secureCookie: true</code> または <code>-secure-cookie</code> を指定します。</p>
 <h2 id="groups">グループ管理</h2>
 <ol>

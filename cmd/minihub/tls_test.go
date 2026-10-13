@@ -96,33 +96,31 @@ func writeTransportConfig(t *testing.T, dir string, cfg config.Config) string {
 }
 
 func TestHTTPAndHTTPSStartup(t *testing.T) {
-	for _, storage := range []string{"sqlite"} {
-		for _, secure := range []bool{false, true} {
-			scheme := "http"
-			if secure {
-				scheme = "https"
+	for _, secure := range []bool{false, true} {
+		scheme := "http"
+		if secure {
+			scheme = "https"
+		}
+		t.Run(scheme, func(t *testing.T) {
+			dir := t.TempDir()
+			settings, roots := transportCertificate(t, dir)
+			tlsConfig, err := loadServerTLS(settings)
+			if err != nil || tlsConfig.MinVersion != tls.VersionTLS12 {
+				t.Fatalf("TLS minimum: %v", err)
 			}
-			t.Run(storage+"/"+scheme, func(t *testing.T) {
-				dir := t.TempDir()
-				settings, roots := transportCertificate(t, dir)
-				tlsConfig, err := loadServerTLS(settings)
-				if err != nil || tlsConfig.MinVersion != tls.VersionTLS12 {
-					t.Fatalf("TLS minimum: %v", err)
-				}
-				settings.Enabled = secure
-				reservation, err := net.Listen("tcp", "127.0.0.1:0")
-				if err != nil {
-					t.Fatal(err)
-				}
-				addr := reservation.Addr().String()
-				if err := reservation.Close(); err != nil {
-					t.Fatal(err)
-				}
-				cfg := config.Defaults()
-				cfg.Storage.Type = storage
-				cfg.Server.ListenAddress, cfg.Server.DataDir, cfg.Server.TLS = addr, filepath.Join(dir, "data"), settings
-				cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile = "server.crt", "server.key"
-				cfg.InitialAdmin = &config.InitialAdmin{ID: "admin", Name: "Admin", Password: "transport-test-password"}
+			settings.Enabled = secure
+			reservation, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			addr := reservation.Addr().String()
+			if err := reservation.Close(); err != nil {
+				t.Fatal(err)
+			}
+			cfg := config.Defaults()
+			cfg.Server.ListenAddress, cfg.Server.DataDir, cfg.Server.TLS = addr, filepath.Join(dir, "data"), settings
+			cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile = "server.crt", "server.key"
+			cfg.InitialAdmin = &config.InitialAdmin{ID: "admin", Name: "Admin", Password: "transport-test-password"}
 				cfg.Notifications.OSNotificationsEnabled = false
 				path := writeTransportConfig(t, dir, cfg)
 				cmd := transportCommand(t, path)
@@ -233,7 +231,6 @@ func TestHTTPAndHTTPSStartup(t *testing.T) {
 				}
 			})
 		}
-	}
 }
 
 func TestInvalidCertificateStopsBeforeStorageInitialization(t *testing.T) {

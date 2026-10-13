@@ -33,12 +33,12 @@ async function waitForService(url, child) {
     const browserPath = process.env.BROWSER_PATH || (process.platform === 'win32' ? 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' : undefined);
     const browser = await chromium.launch({headless: true, ...(browserPath ? {executablePath: browserPath} : {})});
     try {
-        for (const [basePath, storage, override] of [['', 'file', false], ['/hub', 'file', false], ['/apps/chat', 'sqlite', true]]) {
+        for (const [basePath, override] of [['', false], ['/hub', false], ['/apps/chat', true]]) {
             const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'minihub-base-path-'));
             const upstreamPort = await freePort();
             fs.writeFileSync(path.join(temp, 'minihub.json'), JSON.stringify({
                 server: {listenAddress: `127.0.0.1:${upstreamPort}`, basePath: override ? '/configured' : basePath},
-                storage: {type: storage}, notifications: {osNotificationsEnabled: false},
+                notifications: {osNotificationsEnabled: false},
                 initialAdmin: {id: 'admin', name: '管理者', password},
             }), {mode: 0o600});
             const child = spawn(executable, ['-config', 'minihub.json', ...(override ? ['-base-path', basePath] : [])], {cwd: temp, stdio: 'ignore'});
@@ -157,7 +157,7 @@ async function waitForService(url, child) {
                 assert(paths.filter(url => url !== '/other/').every(url => url.startsWith(basePath + '/')), `unprefixed request: ${paths}`);
                 assert.deepEqual(errors, []);
                 assert.deepEqual(failures, []);
-                console.log(`PASS ${basePath || '/'} (${storage}${override ? ', CLI override' : ''}): proxy, login return, schedules, cookies, WebSocket and reconnect`);
+                console.log(`PASS ${basePath || '/'}${override ? ' (CLI override)' : ''}: proxy, login return, schedules, cookies, WebSocket and reconnect`);
             } finally {
                 await context.close();
                 for (const socket of sockets) socket.destroy();

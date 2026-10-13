@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -46,9 +45,6 @@ func run() (runErr error) {
 			}
 		}
 	}()
-	if len(os.Args) > 1 && os.Args[1] == "migrate" {
-		return migrate(os.Args[2:])
-	}
 	if len(os.Args) > 1 && os.Args[1] == "stop" {
 		return stopServer(os.Args[2:])
 	}
@@ -61,6 +57,9 @@ func run() (runErr error) {
 	dataDir := flag.String("data", "data", "persistent data directory")
 	secureCookie := flag.Bool("secure-cookie", false, "send the session cookie only over HTTPS")
 	flag.Parse()
+	if flag.NArg() > 0 {
+		return fmt.Errorf("unexpected argument: %s", flag.Arg(0))
+	}
 	explicit := map[string]bool{}
 	flag.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
 	cfg, loaded, err := config.Load(*configPath, explicit["config"])
@@ -100,7 +99,7 @@ func run() (runErr error) {
 		return fmt.Errorf("open server log: %w", err)
 	}
 	logger = slog.New(slog.NewJSONHandler(logFile, &slog.HandlerOptions{Level: levels[cfg.Logging.Level]}))
-	store, err := backend.Open(*dataDir, cfg.Storage.Type)
+	store, err := backend.Open(*dataDir)
 	if err != nil {
 		logger.Error("initialize storage", "error", err)
 		return err
@@ -147,7 +146,7 @@ func run() (runErr error) {
 	if tlsConfig != nil {
 		scheme = "https"
 	}
-	logger.Info("minihub listening", "scheme", scheme, "address", *addr, "basePath", *basePath, "data", *dataDir, "storage", cfg.Storage.Type)
+	logger.Info("minihub listening", "scheme", scheme, "address", *addr, "basePath", *basePath, "data", *dataDir, "storage", "sqlite")
 	if runtime.GOOS == "windows" {
 		requested, closeEvent, err := shutdown.Listen(*dataDir)
 		if err != nil {
@@ -182,44 +181,6 @@ func run() (runErr error) {
 			_ = server.Close()
 			return err
 		}
-	}
-	return nil
-}
-
-func migrate(args []string) error {
-	flags := flag.NewFlagSet("migrate", flag.ContinueOnError)
-	configPath := flags.String("config", config.DefaultFilename, "configuration file")
-	data := flags.String("data", "data", "persistent data directory")
-	to := flags.String("to", "", "destination storage type (sqlite)")
-	dry := flags.Bool("dry-run", false, "validate using a disposable DB without switching storage")
-	if err := flags.Parse(args); err != nil {
-		return err
-	}
-	if *to != "sqlite" || flags.NArg() != 0 {
-		return errors.New("usage: minihub migrate [-config file] [-data directory] -to sqlite [-dry-run]")
-	}
-	explicit := map[string]bool{}
-	flags.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
-	cfg, loaded, err := config.Load(*configPath, explicit["config"])
-	if err != nil {
-		return err
-	}
-	if loaded && !explicit["data"] {
-		*data = cfg.Server.DataDir
-	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	report, err := backend.Migrate(ctx, *data, *dry)
-	if encodeErr := json.NewEncoder(os.Stdout).Encode(report); encodeErr != nil {
-		return errors.Join(err, encodeErr)
-	}
-	if err != nil {
-		return err
-	}
-	if *dry {
-		slog.Info("migration validation completed; storage unchanged")
-	} else {
-		slog.Info("migration completed; set storage.type to sqlite and restart")
 	}
 	return nil
 }
