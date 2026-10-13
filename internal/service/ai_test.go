@@ -324,7 +324,7 @@ func TestDirectAICallQuotaAndUsage(t *testing.T) {
 				{
 					"message": map[string]any{
 						"role":    "assistant",
-						"content": "AI reply from whiteboard",
+						"content": "AI reply from canvas",
 					},
 				},
 			},
@@ -348,7 +348,7 @@ func TestDirectAICallQuotaAndUsage(t *testing.T) {
 	defer s.CloseAI()
 
 	// 1. Quota = 0 (unlimited)
-	s.SetAIWhiteboardOptions(true, 0)
+	s.SetAICanvasOptions(true, 0)
 	resp, err := s.DirectAICall(ctx, user, domain.AIDirectRequest{
 		AIAccountID: "board-ai",
 		Messages: []domain.AIDirectMessage{
@@ -358,12 +358,12 @@ func TestDirectAICallQuotaAndUsage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first call failed: %v", err)
 	}
-	if resp.Reply != "AI reply from whiteboard" || resp.DailyUsed != 1 {
+	if resp.Reply != "AI reply from canvas" || resp.DailyUsed != 1 {
 		t.Fatalf("unexpected resp: %+v", resp)
 	}
 
 	// 2. Set quota to 1
-	s.SetAIWhiteboardOptions(true, 1)
+	s.SetAICanvasOptions(true, 1)
 	// Already used 1, so next call must fail with ErrQuotaExceeded
 	_, err = s.DirectAICall(ctx, user, domain.AIDirectRequest{
 		AIAccountID: "board-ai",
@@ -375,8 +375,8 @@ func TestDirectAICallQuotaAndUsage(t *testing.T) {
 		t.Fatalf("expected ErrQuotaExceeded, got %v", err)
 	}
 
-	// 3. Disabled whiteboard
-	s.SetAIWhiteboardOptions(false, 0)
+	// 3. Disabled canvas
+	s.SetAICanvasOptions(false, 0)
 	_, err = s.DirectAICall(ctx, user, domain.AIDirectRequest{
 		AIAccountID: "board-ai",
 		Messages: []domain.AIDirectMessage{

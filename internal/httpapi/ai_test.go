@@ -169,7 +169,7 @@ func TestAIAccountsAdminEndpoints(t *testing.T) {
 	}
 }
 
-func TestAIWhiteboardEndpoints(t *testing.T) {
+func TestAICanvasEndpoints(t *testing.T) {
 	store, err := storetest.New(t, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -182,7 +182,7 @@ func TestAIWhiteboardEndpoints(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := service.New(store)
-	svc.SetAIWhiteboardOptions(true, 1)
+	svc.SetAICanvasOptions(true, 1)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	if err := svc.StartAI(ctx, logger); err != nil {
 		t.Fatal(err)
@@ -224,6 +224,12 @@ func TestAIWhiteboardEndpoints(t *testing.T) {
 	})
 	if dMissing.Code != 404 {
 		t.Fatalf("missing AI expected 404, got %d %s", dMissing.Code, dMissing.Body.String())
+	}
+
+	// 4. Invalid JSON body
+	dInvalidJSON := request(t, handler, http.MethodPost, "/api/ai/direct", "user", "[object Object]")
+	if dInvalidJSON.Code != 400 || !strings.Contains(dInvalidJSON.Body.String(), "invalid JSON body") {
+		t.Fatalf("invalid JSON expected 400 with details, got %d %s", dInvalidJSON.Code, dInvalidJSON.Body.String())
 	}
 }
 

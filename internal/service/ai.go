@@ -765,7 +765,7 @@ func (s *Service) GetAIQuota(ctx context.Context, userID string) (*domain.AIQuot
 	return &domain.AIQuotaResponse{
 		DailyQuota: s.aiDailyQuota,
 		DailyUsed:  used,
-		Enabled:    s.aiWhiteboardEnabled,
+		Enabled:    s.aiCanvasEnabled,
 	}, nil
 }
 
@@ -820,7 +820,7 @@ func (s *Service) GetAIDailyUsageSummary(ctx context.Context, actorID, date stri
 }
 
 func (s *Service) DirectAICall(ctx context.Context, userID string, req domain.AIDirectRequest) (*domain.AIDirectResponse, error) {
-	if !s.aiWhiteboardEnabled {
+	if !s.aiCanvasEnabled {
 		return nil, ErrForbidden
 	}
 	u, err := s.user(ctx, userID)
@@ -846,7 +846,7 @@ func (s *Service) DirectAICall(ctx context.Context, userID string, req domain.AI
 		return nil, ErrForbidden
 	}
 	if len(req.Messages) == 0 {
-		return nil, ErrInvalid
+		return nil, fmt.Errorf("%w: messages must not be empty", ErrInvalid)
 	}
 
 	today := time.Now().Format("2006-01-02")

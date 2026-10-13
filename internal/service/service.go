@@ -134,7 +134,7 @@ type Service struct {
 	publisher           MessagePublisher
 	selfPasswordChange  bool
 	mentionRetention    time.Duration
-	aiWhiteboardEnabled bool
+	aiCanvasEnabled     bool
 	aiDailyQuota        int
 }
 
@@ -171,16 +171,16 @@ func NewWithOptions(store storage.Storage, selfPasswordChange bool, mentionReten
 		presenceMembers:     make(map[string][]string),
 		selfPasswordChange:  selfPasswordChange,
 		mentionRetention:    mentionRetention,
-		aiWhiteboardEnabled: true,
+		aiCanvasEnabled:     true,
 	}
 }
 
-func (s *Service) SetAIWhiteboardOptions(enabled bool, quota int) {
-	s.aiWhiteboardEnabled = enabled
+func (s *Service) SetAICanvasOptions(enabled bool, quota int) {
+	s.aiCanvasEnabled = enabled
 	s.aiDailyQuota = quota
 }
 
-func (s *Service) AIWhiteboardEnabled() bool { return s.aiWhiteboardEnabled }
+func (s *Service) AICanvasEnabled() bool { return s.aiCanvasEnabled }
 func (s *Service) AIDailyQuota() int        { return s.aiDailyQuota }
 
 func (s *Service) SelfPasswordChangeEnabled() bool { return s.selfPasswordChange }

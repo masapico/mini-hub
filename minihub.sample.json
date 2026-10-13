@@ -19,7 +19,7 @@
   "features": {
     "selfPasswordChange": false,
     "networkPathMode": "copy",
-    "aiWhiteboardEnabled": true,
+    "aiCanvasEnabled": true,
     "aiDailyQuota": 0
   },
   "notifications": {

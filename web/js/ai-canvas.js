@@ -14,6 +14,11 @@
 
     function storageKey() {
         const userID = window.S?.me?.id;
+        return userID ? `minihub_ai_canvas_${userID}` : null;
+    }
+
+    function legacyStorageKey() {
+        const userID = window.S?.me?.id;
         return userID ? `minihub_ai_board_${userID}` : null;
     }
 
@@ -21,7 +26,18 @@
         const key = storageKey();
         if (!key) return [];
         try {
-            const raw = localStorage.getItem(key);
+            let raw = localStorage.getItem(key);
+            // Migrate legacy whiteboard messages if new key not found
+            if (!raw) {
+                const legacyKey = legacyStorageKey();
+                if (legacyKey) {
+                    raw = localStorage.getItem(legacyKey);
+                    if (raw) {
+                        localStorage.setItem(key, raw);
+                        localStorage.removeItem(legacyKey);
+                    }
+                }
+            }
             if (!raw) return [];
             const parsed = JSON.parse(raw);
             return Array.isArray(parsed) ? parsed : [];
@@ -63,7 +79,7 @@
     }
 
     function updateQuotaDisplay() {
-        const statusEl = $("aiWhiteboardQuotaStatus");
+        const statusEl = $("aiCanvasQuotaStatus");
         if (statusEl) {
             statusEl.textContent = formatQuota(State.quota);
         }
@@ -71,21 +87,30 @@
 
     function renderMessage(msg) {
         const wrap = document.createElement("div");
-        wrap.className = `ai-board-msg ${msg.role}`;
+        wrap.className = `ai-canvas-msg ${msg.role}`;
 
         const meta = document.createElement("div");
-        meta.className = "ai-board-msg-meta";
+        meta.className = "ai-canvas-msg-meta";
         const roleIcon = msg.role === "assistant" ? window.svgIcon("robot") : window.svgIcon("person");
         meta.append(roleIcon);
         meta.append(document.createTextNode(msg.role === "assistant" ? (msg.accountName || "AI") : "あなた"));
         wrap.append(meta);
 
         const body = document.createElement("div");
-        body.className = "ai-board-msg-body";
-        if (msg.role === "assistant" && window.marked?.parse) {
-            try {
-                body.innerHTML = window.marked.parse(msg.content);
-            } catch {
+        body.className = "ai-canvas-msg-body";
+        if (msg.role === "assistant") {
+            if (typeof window.renderMessageMarkdown === "function") {
+                body.append(window.renderMessageMarkdown(msg.content));
+            } else if (window.marked?.parse) {
+                try {
+                    const mdContainer = document.createElement("div");
+                    mdContainer.className = "markdown-body";
+                    mdContainer.innerHTML = window.marked.parse(msg.content);
+                    body.append(mdContainer);
+                } catch {
+                    body.textContent = msg.content;
+                }
+            } else {
                 body.textContent = msg.content;
             }
         } else {
@@ -95,12 +120,12 @@
 
         if (msg.role === "assistant") {
             const actions = document.createElement("div");
-            actions.className = "ai-board-msg-actions";
+            actions.className = "ai-canvas-msg-actions";
 
             // 1. Copy
             const copyBtn = document.createElement("button");
             copyBtn.type = "button";
-            copyBtn.className = "ai-board-action-btn";
+            copyBtn.className = "ai-canvas-action-btn";
             copyBtn.title = "クリップボードにコピー";
             copyBtn.append(window.svgIcon("clipboard"), document.createTextNode(" コピー"));
             copyBtn.onclick = () => {
@@ -118,7 +143,7 @@
             // 2. Insert into composer
             const insertBtn = document.createElement("button");
             insertBtn.type = "button";
-            insertBtn.className = "ai-board-action-btn";
+            insertBtn.className = "ai-canvas-action-btn";
             insertBtn.title = "メッセージ入力欄に挿入";
             insertBtn.append(window.svgIcon("box-arrow-in-down-left"), document.createTextNode(" 入力欄に挿入"));
             insertBtn.onclick = () => {
@@ -129,7 +154,7 @@
             // 3. Share to channel
             const shareBtn = document.createElement("button");
             shareBtn.type = "button";
-            shareBtn.className = "ai-board-action-btn";
+            shareBtn.className = "ai-canvas-action-btn";
             shareBtn.title = "現在のチャンネルに共有";
             shareBtn.append(window.svgIcon("chat-quote"), document.createTextNode(" チャンネルに共有"));
             shareBtn.onclick = () => {
@@ -144,14 +169,14 @@
     }
 
     function renderAllMessages() {
-        const container = $("aiWhiteboardMessages");
+        const container = $("aiCanvasMessages");
         if (!container) return;
         container.innerHTML = "";
 
         if (State.messages.length === 0) {
             const welcome = document.createElement("div");
-            welcome.className = "ai-whiteboard-welcome p-3 text-muted small";
-            welcome.innerHTML = `<p class="mb-1">自分専用の作業・下書き用ホワイトボードです。ここでの対話は他ユーザーには公開されません。</p><p class="mb-0">下書きの推敲や質問を行い、「入力欄に挿入」や「チャンネルに共有」でチームに還元できます。</p>`;
+            welcome.className = "ai-canvas-welcome p-3 text-muted small";
+            welcome.innerHTML = `<p class="mb-1">自分専用の作業・下書き用キャンバスです。ここでの対話は他ユーザーには公開されません。</p><p class="mb-0">下書きの推敲や質問を行い、「入力欄に挿入」や「チャンネルに共有」でチームに還元できます。</p>`;
             container.append(welcome);
             return;
         }
@@ -186,7 +211,7 @@
             return;
         }
 
-        const quote = `> 💡 **マイボードのメモを共有しました** (${accountName || "AI"})\n> \n` +
+        const quote = `> 💡 **AIキャンバスのメモを共有しました** (${accountName || "AI"})\n> \n` +
             text.split("\n").map(l => `> ${l}`).join("\n");
 
         if (!confirm(`現在のチャンネル「${currentChannel.name}」にこの回答を共有しますか？`)) {
@@ -196,7 +221,7 @@
         try {
             await window.api(`/api/channels/${encodeURIComponent(currentChannel.id)}/messages`, {
                 method: "POST",
-                body: { text: quote },
+                body: JSON.stringify({ text: quote }),
             });
             window.note?.(`チャンネル「${currentChannel.name}」に共有しました`);
         } catch (err) {
@@ -205,16 +230,16 @@
     }
 
     async function updateAccountsDropdown() {
-        const select = $("aiWhiteboardAccountSelect");
-        const toggleBtn = $("aiWhiteboardToggle");
-        const sidebarBtn = $("sidebarWhiteboardBtn");
+        const select = $("aiCanvasAccountSelect");
+        const toggleBtn = $("aiCanvasToggle");
+        const sidebarBtn = $("sidebarCanvasBtn");
         if (!select) return;
 
-        const isFeatureEnabled = document.body.dataset.aiWhiteboardEnabled !== "false";
+        const isFeatureEnabled = document.body.dataset.aiCanvasEnabled !== "false";
         if (!isFeatureEnabled) {
             if (toggleBtn) toggleBtn.classList.add("hidden");
             if (sidebarBtn) sidebarBtn.classList.add("hidden");
-            if (State.open) toggleWhiteboard(false);
+            if (State.open) toggleCanvas(false);
             return;
         }
 
@@ -232,7 +257,7 @@
         if (!accounts || accounts.length === 0) {
             if (toggleBtn) toggleBtn.classList.add("hidden");
             if (sidebarBtn) sidebarBtn.classList.add("hidden");
-            if (State.open) toggleWhiteboard(false);
+            if (State.open) toggleCanvas(false);
             return;
         }
 
@@ -257,10 +282,10 @@
         }
     }
 
-    function toggleWhiteboard(forceOpen) {
-        const panel = $("aiWhiteboardPanel");
-        const toggleBtn = $("aiWhiteboardToggle");
-        const sidebarBtn = $("sidebarWhiteboardBtn");
+    function toggleCanvas(forceOpen) {
+        const panel = $("aiCanvasPanel");
+        const toggleBtn = $("aiCanvasToggle");
+        const sidebarBtn = $("sidebarCanvasBtn");
         const app = document.querySelector(".app");
         if (!panel) return;
 
@@ -276,7 +301,7 @@
             sidebarBtn.classList.toggle("active", shouldOpen);
         }
         if (app) {
-            app.classList.toggle("whiteboard-open", shouldOpen);
+            app.classList.toggle("canvas-open", shouldOpen);
         }
 
         if (shouldOpen) {
@@ -291,22 +316,22 @@
             renderAllMessages();
             fetchQuota();
             updateAccountsDropdown();
-            $("aiWhiteboardInput")?.focus();
+            $("aiCanvasInput")?.focus();
         }
     }
 
     async function handleSend(e) {
         e?.preventDefault();
-        const input = $("aiWhiteboardInput");
-        const sendBtn = $("aiWhiteboardSend");
-        const statusEl = $("aiWhiteboardStatus");
+        const input = $("aiCanvasInput");
+        const sendBtn = $("aiCanvasSend");
+        const statusEl = $("aiCanvasStatus");
         if (!input || !sendBtn) return;
 
         const text = input.innerText.trim();
         const attachments = State.stagedAttachments || [];
         if (!text && attachments.length === 0) return;
 
-        const accountID = $("aiWhiteboardAccountSelect")?.value || State.activeAccountID;
+        const accountID = $("aiCanvasAccountSelect")?.value || State.activeAccountID;
         if (!accountID) {
             window.note?.("AIモデルを選択してください", true);
             return;
@@ -337,11 +362,11 @@
 
             const res = await window.api("/api/ai/direct", {
                 method: "POST",
-                body: {
+                body: JSON.stringify({
                     aiAccountId: accountID,
                     messages: payloadMessages,
                     attachments: attachments.map(a => ({ name: a.name, data: a.base64 })),
-                },
+                }),
             });
 
             const reply = res.reply || "";
@@ -382,17 +407,17 @@
 
     function clearStagedFiles() {
         State.stagedAttachments = [];
-        const container = $("aiWhiteboardAttachedFiles");
+        const container = $("aiCanvasAttachedFiles");
         if (container) {
             container.innerHTML = "";
             container.classList.add("hidden");
         }
-        const fileInput = $("aiWhiteboardAttachFileInput");
+        const fileInput = $("aiCanvasAttachFileInput");
         if (fileInput) fileInput.value = "";
     }
 
     function renderStagedFiles() {
-        const container = $("aiWhiteboardAttachedFiles");
+        const container = $("aiCanvasAttachedFiles");
         if (!container) return;
         container.innerHTML = "";
         if (State.stagedAttachments.length === 0) {
@@ -455,7 +480,7 @@
     }
 
     function setupResizer() {
-        const resizer = $("aiWhiteboardResizer");
+        const resizer = $("aiCanvasResizer");
         if (!resizer) return;
 
         let startX = 0;
@@ -465,7 +490,7 @@
             if (!State.resizing) return;
             const delta = startX - e.clientX;
             const newWidth = Math.max(320, Math.min(800, startWidth + delta));
-            document.documentElement.style.setProperty("--whiteboard-width", `${newWidth}px`);
+            document.documentElement.style.setProperty("--canvas-width", `${newWidth}px`);
         };
 
         const onMouseUp = () => {
@@ -479,7 +504,7 @@
         resizer.addEventListener("mousedown", (e) => {
             State.resizing = true;
             startX = e.clientX;
-            const panel = $("aiWhiteboardPanel");
+            const panel = $("aiCanvasPanel");
             startWidth = panel ? panel.getBoundingClientRect().width : 440;
             document.body.classList.add("thread-col-resizing");
             resizer.classList.add("is-resizing");
@@ -488,28 +513,28 @@
         });
 
         resizer.addEventListener("dblclick", () => {
-            document.documentElement.style.setProperty("--whiteboard-width", "var(--whiteboard-default-width)");
+            document.documentElement.style.setProperty("--canvas-width", "var(--canvas-default-width)");
         });
     }
 
     function init() {
-        const toggleBtn = $("aiWhiteboardToggle");
-        const sidebarBtn = $("sidebarWhiteboardBtn");
-        const closeBtn = $("aiWhiteboardClose");
-        const resetBtn = $("aiWhiteboardResetBtn");
-        const form = $("aiWhiteboardForm");
-        const input = $("aiWhiteboardInput");
-        const attachBtn = $("aiWhiteboardAttachBtn");
-        const fileInput = $("aiWhiteboardAttachFileInput");
+        const toggleBtn = $("aiCanvasToggle");
+        const sidebarBtn = $("sidebarCanvasBtn");
+        const closeBtn = $("aiCanvasClose");
+        const resetBtn = $("aiCanvasResetBtn");
+        const form = $("aiCanvasForm");
+        const input = $("aiCanvasInput");
+        const attachBtn = $("aiCanvasAttachBtn");
+        const fileInput = $("aiCanvasAttachFileInput");
 
         if (toggleBtn) {
-            toggleBtn.onclick = () => toggleWhiteboard();
+            toggleBtn.onclick = () => toggleCanvas();
         }
         if (sidebarBtn) {
-            sidebarBtn.onclick = () => toggleWhiteboard();
+            sidebarBtn.onclick = () => toggleCanvas();
         }
         if (closeBtn) {
-            closeBtn.onclick = () => toggleWhiteboard(false);
+            closeBtn.onclick = () => toggleCanvas(false);
         }
         if (resetBtn) {
             resetBtn.onclick = () => {
@@ -548,7 +573,7 @@
         window.addEventListener("keydown", (e) => {
             if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "A" || e.key === "a")) {
                 e.preventDefault();
-                toggleWhiteboard();
+                toggleCanvas();
             }
         });
 
@@ -558,12 +583,16 @@
     }
 
     // Expose helpers for app.js integration
-    window.updateAIWhiteboardAccounts = updateAccountsDropdown;
-    window.resetAIWhiteboard = () => {
+    window.updateAICanvasAccounts = updateAccountsDropdown;
+    window.resetAICanvas = () => {
         State.messages = [];
-        toggleWhiteboard(false);
+        toggleCanvas(false);
         renderAllMessages();
     };
+
+    // Backward compatibility aliases
+    window.updateAIWhiteboardAccounts = window.updateAICanvasAccounts;
+    window.resetAIWhiteboard = window.resetAICanvas;
 
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", init);

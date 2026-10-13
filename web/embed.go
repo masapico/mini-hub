@@ -30,7 +30,7 @@ type handler struct {
 type Options struct {
 	BasePath               string
 	OSNotificationsEnabled *bool
-	AIWhiteboardEnabled    *bool
+	AICanvasEnabled        *bool
 	WorkspaceTitle         string
 	LoginMessage           string
 	NetworkPathMode        string
@@ -38,14 +38,14 @@ type Options struct {
 
 func Handler(auth Authenticator, options ...Options) http.Handler {
 	enabled := true
-	settings := Options{WorkspaceTitle: "minihub", LoginMessage: "ユーザーIDとパスワードを入力してください。", NetworkPathMode: "copy", OSNotificationsEnabled: &enabled, AIWhiteboardEnabled: &enabled}
+	settings := Options{WorkspaceTitle: "minihub", LoginMessage: "ユーザーIDとパスワードを入力してください。", NetworkPathMode: "copy", OSNotificationsEnabled: &enabled, AICanvasEnabled: &enabled}
 	if len(options) > 0 {
 		settings.BasePath = options[0].BasePath
 		if options[0].OSNotificationsEnabled != nil {
 			settings.OSNotificationsEnabled = options[0].OSNotificationsEnabled
 		}
-		if options[0].AIWhiteboardEnabled != nil {
-			settings.AIWhiteboardEnabled = options[0].AIWhiteboardEnabled
+		if options[0].AICanvasEnabled != nil {
+			settings.AICanvasEnabled = options[0].AICanvasEnabled
 		}
 		if options[0].WorkspaceTitle != "" {
 			settings.WorkspaceTitle = options[0].WorkspaceTitle

@@ -1223,7 +1223,8 @@ func (a *API) deleteAdminAIAccount(w http.ResponseWriter, r *http.Request, userI
 func (a *API) directAI(w http.ResponseWriter, r *http.Request, userID string) {
 	var input domain.AIDirectRequest
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		a.writeError(w, service.ErrInvalid)
+		a.logger.Warn("directAI decode failed", "error", err, "userId", userID)
+		a.writeError(w, fmt.Errorf("%w: invalid JSON body: %v", service.ErrInvalid, err))
 		return
 	}
 	resp, err := a.service.DirectAICall(r.Context(), userID, input)

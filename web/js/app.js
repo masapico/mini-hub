@@ -74,6 +74,7 @@ function renderChannelAction(channel = S.channel) {
 }
 async function api(path, o = {}) {
     let method = o.method || "GET",
+        body = o.body && typeof o.body !== "string" && !(o.body instanceof FormData) ? JSON.stringify(o.body) : o.body,
         headers = {
             ...(o.body
                 ? { "Content-Type": "application/json" }
@@ -84,7 +85,7 @@ async function api(path, o = {}) {
         },
         r;
     try {
-        r = await fetch(Minihub.url(path), { ...o, headers });
+        r = await fetch(Minihub.url(path), { ...o, headers, body });
     } catch (_) {
         throw Error("通信に失敗しました。ネットワーク接続を確認して、もう一度お試しください");
     }
@@ -746,6 +747,7 @@ function renderMessageMarkdown(text) {
         return fragment(text, false);
     }
 }
+window.renderMessageMarkdown = renderMessageMarkdown;
 
 function renderMessageText(message) {
     if (message.withdrawnAt) return withdrawnNotice(message);
@@ -996,7 +998,7 @@ function realtime() {
 }
 $("logout").onclick = async () => {
     try {
-        window.resetAIWhiteboard?.();
+        window.resetAICanvas?.();
         await api("/api/auth/logout", { method: "POST" });
         location.replace(Minihub.url("/login"));
     } catch (error) {
@@ -2225,7 +2227,7 @@ async function reloadAIAccounts() {
     });
     $("aiButton")?.classList.toggle("hidden", !S.aiAccounts.length);
     $("threadAIButton")?.classList.toggle("hidden", !S.aiAccounts.length);
-    window.updateAIWhiteboardAccounts?.();
+    window.updateAICanvasAccounts?.();
     return S.aiAccounts;
 }
 

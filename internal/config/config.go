@@ -37,7 +37,7 @@ type Server struct {
 type Features struct {
 	SelfPasswordChange  bool   `json:"selfPasswordChange"`
 	NetworkPathMode     string `json:"networkPathMode"`
-	AIWhiteboardEnabled bool   `json:"aiWhiteboardEnabled"`
+	AICanvasEnabled     bool   `json:"aiCanvasEnabled"`
 	AIDailyQuota        int    `json:"aiDailyQuota"`
 }
 type TLS struct {
@@ -71,7 +71,7 @@ func Defaults() Config {
 			WorkspaceTitle: "minihub",
 			LoginMessage:   "ユーザーIDとパスワードを入力してください。",
 		},
-		Features:      Features{NetworkPathMode: "copy", AIWhiteboardEnabled: true, AIDailyQuota: 0},
+		Features:      Features{NetworkPathMode: "copy", AICanvasEnabled: true, AIDailyQuota: 0},
 		Notifications: Notifications{MentionRetentionDays: 365, OSNotificationsEnabled: true},
 		Logging:       Logging{Level: "info"},
 	}
