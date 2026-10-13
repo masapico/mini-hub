@@ -413,3 +413,174 @@
     font-size: 11px;
     margin-left: 2px;
 }
+
+/* Markdown Rendering Styles */
+.message .markdown-body {
+    line-height: 1.6;
+    word-break: break-word;
+}
+.message .markdown-body > *:first-child {
+    margin-top: 0;
+}
+.message .markdown-body > *:last-child {
+    margin-bottom: 0;
+}
+.message .markdown-body p {
+    margin: 0 0 0.5rem;
+}
+.message .markdown-body p:last-child {
+    margin-bottom: 0;
+}
+.message .markdown-body h1 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin: 0.85rem 0 0.4rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--line);
+}
+.message .markdown-body h2 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 0.75rem 0 0.35rem;
+    padding-bottom: 0.2rem;
+    border-bottom: 1px solid var(--line);
+}
+.message .markdown-body h3 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin: 0.6rem 0 0.3rem;
+}
+.message .markdown-body h4,
+.message .markdown-body h5,
+.message .markdown-body h6 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0.5rem 0 0.25rem;
+}
+.message .markdown-body ul,
+.message .markdown-body ol {
+    padding-left: 1.4rem;
+    margin: 0.35rem 0 0.5rem;
+}
+.message .markdown-body li {
+    margin-bottom: 0.2rem;
+}
+.message .markdown-body li > p {
+    margin-bottom: 0.2rem;
+}
+.message .markdown-body blockquote {
+    margin: 0.5rem 0;
+    padding: 6px 12px;
+    border-left: 3px solid #cbd5e1;
+    background: #f8fafc;
+    color: #475569;
+    border-radius: 0 4px 4px 0;
+}
+.message .markdown-body blockquote > *:last-child {
+    margin-bottom: 0;
+}
+.message .markdown-body hr {
+    margin: 0.75rem 0;
+    border: 0;
+    border-top: 1px solid var(--line);
+}
+
+/* Code block & Copy button */
+.message .code-block-wrapper {
+    position: relative;
+    margin: 0.6rem 0;
+    border-radius: 6px;
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    overflow: hidden;
+}
+.message .code-block-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 10px;
+    background: #1e293b;
+    color: #94a3b8;
+    font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.message .code-lang {
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+}
+.message .code-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: none;
+    background: transparent;
+    color: #cbd5e1;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.message .code-copy-btn:hover {
+    background: #334155;
+    color: #fff;
+}
+.message .code-copy-btn.copied {
+    color: #86efac;
+}
+.message .code-block-wrapper pre {
+    margin: 0;
+    padding: 10px 12px;
+    overflow-x: auto;
+    color: #f8fafc;
+    font-size: 13px;
+    line-height: 1.5;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+.message .code-block-wrapper pre code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    border-radius: 0;
+    font-size: inherit;
+}
+.message .markdown-body :not(pre) > code {
+    background: #f1f5f9;
+    color: #0f172a;
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-size: 0.88em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    border: 1px solid #e2e8f0;
+}
+
+/* Tables */
+.message .table-responsive {
+    margin: 0.6rem 0;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.message .table-responsive table {
+    width: 100%;
+    margin-bottom: 0;
+    font-size: 13px;
+    border-collapse: collapse;
+    background: #fff;
+}
+.message .table-responsive th,
+.message .table-responsive td {
+    padding: 6px 12px;
+    border: 1px solid #cbd5e1;
+    text-align: left;
+}
+.message .table-responsive th {
+    background: #f8fafc;
+    font-weight: 600;
+    color: #334155;
+}
+.message .table-responsive tr:nth-child(even) td {
+    background: #fcfdfe;
+}
+

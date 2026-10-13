@@ -542,6 +542,214 @@ function fragment(text, editable = false) {
     return root;
 }
 
+function sanitizeMessageHTML(html) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+    const allowedTags = new Set([
+        "H1", "H2", "H3", "H4", "H5", "H6",
+        "P", "BR", "HR", "BLOCKQUOTE",
+        "PRE", "CODE",
+        "UL", "OL", "LI",
+        "TABLE", "THEAD", "TBODY", "TR", "TH", "TD",
+        "STRONG", "B", "EM", "I", "U", "S", "DEL",
+        "A", "SPAN", "DIV"
+    ]);
+    const allowedAttrs = new Set(["href", "title", "target", "rel", "class"]);
+
+    function clean(node) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+            const tag = node.tagName.toUpperCase();
+            if (!allowedTags.has(tag)) {
+                if (["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED"].includes(tag)) {
+                    node.remove();
+                    return;
+                }
+                const parent = node.parentNode;
+                if (parent) {
+                    while (node.firstChild) {
+                        parent.insertBefore(node.firstChild, node);
+                    }
+                    parent.removeChild(node);
+                }
+                return;
+            }
+            const attrs = Array.from(node.attributes);
+            for (const a of attrs) {
+                const name = a.name.toLowerCase();
+                if (!allowedAttrs.has(name) && !name.startsWith("data-")) {
+                    node.removeAttribute(a.name);
+                    continue;
+                }
+                if (name === "href") {
+                    const cleanHref = safeLinkURL(a.value);
+                    if (!cleanHref) {
+                        node.removeAttribute(a.name);
+                    } else {
+                        node.setAttribute("href", cleanHref);
+                    }
+                }
+                if (name.startsWith("on")) {
+                    node.removeAttribute(a.name);
+                }
+            }
+            const children = Array.from(node.childNodes);
+            for (const child of children) {
+                clean(child);
+            }
+        }
+    }
+    const rootNodes = Array.from(doc.body.childNodes);
+    for (const n of rootNodes) clean(n);
+    return doc.body.innerHTML;
+}
+
+function processMarkdownDOM(container) {
+    const codeBlocks = container.querySelectorAll("pre > code");
+    codeBlocks.forEach(codeElem => {
+        const pre = codeElem.parentElement;
+        if (!pre || pre.parentElement?.classList.contains("code-block-wrapper")) return;
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "code-block-wrapper";
+
+        const header = document.createElement("div");
+        header.className = "code-block-header";
+
+        let langName = "CODE";
+        const langClass = Array.from(codeElem.classList).find(c => c.startsWith("language-"));
+        if (langClass) {
+            langName = langClass.replace("language-", "").toUpperCase();
+        }
+        const langBadge = document.createElement("span");
+        langBadge.className = "code-lang";
+        langBadge.textContent = langName;
+
+        const copyBtn = document.createElement("button");
+        copyBtn.type = "button";
+        copyBtn.className = "code-copy-btn";
+        copyBtn.textContent = "コピー";
+        copyBtn.onclick = async () => {
+            const textToCopy = codeElem.textContent;
+            let ok = false;
+            try {
+                if (navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(textToCopy);
+                    ok = true;
+                }
+            } catch (_) {}
+            if (!ok) ok = fallbackCopyText(textToCopy);
+            if (ok) {
+                copyBtn.classList.add("copied");
+                copyBtn.textContent = "コピー完了 ✓";
+                setTimeout(() => {
+                    copyBtn.classList.remove("copied");
+                    copyBtn.textContent = "コピー";
+                }, 2000);
+            }
+        };
+
+        header.append(langBadge, copyBtn);
+        pre.parentNode.insertBefore(wrapper, pre);
+        wrapper.append(header, pre);
+    });
+
+    const tables = container.querySelectorAll("table");
+    tables.forEach(table => {
+        if (table.parentElement?.classList.contains("table-responsive")) return;
+        const resp = document.createElement("div");
+        resp.className = "table-responsive";
+        table.parentNode.insertBefore(resp, table);
+        resp.append(table);
+    });
+
+    const links = container.querySelectorAll("a");
+    links.forEach(a => {
+        const href = a.getAttribute("href") || "";
+        const location = networkLocation(a.textContent, href);
+        if (location) {
+            a.replaceWith(location);
+            return;
+        }
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.title = `リンク先: ${linkDestinationLabel(href)}`;
+    });
+
+    const mentionRegex = /@(?:(group|ai):)?([A-Za-z0-9][A-Za-z0-9_-]{0,63})(?:（([^\n）]*)）)?/g;
+    function replaceMentionsInTextNodes(node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+            const text = node.nodeValue;
+            if (!text || !text.includes("@")) return;
+            let match;
+            mentionRegex.lastIndex = 0;
+            let lastIndex = 0;
+            const frag = document.createDocumentFragment();
+            let hasMatch = false;
+
+            while ((match = mentionRegex.exec(text)) !== null) {
+                hasMatch = true;
+                if (match.index > lastIndex) {
+                    frag.append(document.createTextNode(text.slice(lastIndex, match.index)));
+                }
+                const kind = match[1];
+                const id = match[2];
+                const label = match[3];
+                const isGroup = kind === "group";
+                const isAI = kind === "ai";
+                const span = document.createElement("span");
+                span.className = "mention" + (isAI ? "" : isGroup ? S.me?.groups?.includes(id) ? " me" : "" : id === S.me?.id ? " me" : "");
+                span.textContent = (isAI ? "🤖 @" : "@") + (isAI ? S.aiAccounts?.find(a => a.id === id)?.name || label || id : isGroup ? S.groups?.get(id) || label || id : S.directory?.get(id) || label || id);
+                span.title = "@" + (isAI ? "ai:" : isGroup ? "group:" : "") + id;
+                frag.append(span);
+                lastIndex = mentionRegex.lastIndex;
+            }
+            if (hasMatch) {
+                if (lastIndex < text.length) {
+                    frag.append(document.createTextNode(text.slice(lastIndex)));
+                }
+                node.replaceWith(frag);
+            }
+            return;
+        }
+        if (node.nodeType === Node.ELEMENT_NODE) {
+            const tag = node.tagName.toUpperCase();
+            if (tag === "PRE" || tag === "CODE" || tag === "A" || node.classList.contains("mention") || node.classList.contains("code-block-header")) {
+                return;
+            }
+            const children = Array.from(node.childNodes);
+            for (const child of children) {
+                replaceMentionsInTextNodes(child);
+            }
+        }
+    }
+    replaceMentionsInTextNodes(container);
+}
+
+function renderMessageMarkdown(text) {
+    if (!text) {
+        return document.createElement("span");
+    }
+    if (typeof marked === "undefined" || !marked.parse) {
+        return fragment(text, false);
+    }
+    try {
+        const rawHTML = marked.parse(text, { gfm: true, breaks: true });
+        const cleanHTML = sanitizeMessageHTML(rawHTML);
+        const container = document.createElement("div");
+        container.className = "markdown-body";
+        container.innerHTML = cleanHTML;
+        processMarkdownDOM(container);
+        return container;
+    } catch (_) {
+        return fragment(text, false);
+    }
+}
+
+function renderMessageText(message) {
+    if (message.withdrawnAt) return withdrawnNotice(message);
+    return renderMessageMarkdown(messageDisplayText(message));
+}
+
 function escapeMarkupText(text) {
     return text.replace(/([\\*_[\]~`])/g, "\\$1");
 }
@@ -737,7 +945,7 @@ function render() {
         a.querySelector(".time").textContent = new Date(
             m.ts,
         ).toLocaleString("ja-JP");
-        a.querySelector(".text").append(fragment(messageDisplayText(m)));
+        a.querySelector(".text").append(renderMessageText(m));
         if (!m.withdrawnAt && m.attachments && m.attachments.length) {
             const atts = renderAttachments(m.attachments);
             if (atts) a.querySelector(".text").append(atts);
@@ -3387,7 +3595,7 @@ render = function () {
                 minute: "2-digit",
             });
         article.querySelector(".seq").textContent = `seq ${m.seq}`;
-		article.querySelector(".text").append(m.withdrawnAt ? withdrawnNotice(m) : fragment(messageDisplayText(m)));
+		article.querySelector(".text").append(renderMessageText(m));
 		if (!m.withdrawnAt && m.attachments && m.attachments.length) {
 			const atts = renderAttachments(m.attachments);
 			if (atts) article.querySelector(".text").append(atts);

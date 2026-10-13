@@ -1,6 +1,17 @@
-.thread-panel { min-width:0; min-height:0; display:flex; flex-direction:column; background:#fff; border-left:1px solid var(--line); grid-column:3; grid-row:1; }
-.app.thread-open { grid-template-columns:248px minmax(280px,1fr) minmax(340px,420px); }
+:root {
+  --thread-default-width: 420px;
+  --thread-width: var(--thread-default-width);
+}
+.thread-panel { position:relative; min-width:0; min-height:0; display:flex; flex-direction:column; background:#fff; border-left:1px solid var(--line); grid-column:3; grid-row:1; }
+.app.thread-open { grid-template-columns:248px minmax(280px,1fr) var(--thread-width); }
+.thread-resizer { position:absolute; left:-4px; top:0; bottom:0; width:8px; cursor:col-resize; z-index:10; user-select:none; transition:background-color .15s ease; }
+.thread-resizer:hover, .thread-resizer.is-resizing { background:var(--focus, #2563eb); opacity:.7; }
+body.thread-col-resizing { cursor:col-resize !important; user-select:none !important; }
 .thread-header { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:18px; border-bottom:1px solid var(--line); }
+.thread-header-actions { display:flex; align-items:center; gap:8px; }
+.thread-expand-button { display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; padding:0; border-radius:6px; color:var(--muted); border:none; background:transparent; }
+.thread-expand-button:hover { color:var(--ink); background:var(--surface-hover); }
+.thread-expand-button svg { width:16px; height:16px; }
 .thread-header h2 { font-size:18px; margin:0 0 4px; }
 .thread-summary-bar { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:47px; padding:8px 16px; }
 .thread-status { min-width:0; overflow:hidden; color:var(--muted); font-size:13px; text-overflow:ellipsis; white-space:nowrap; }
@@ -40,6 +51,7 @@
 @media(max-width:1050px) {
  .app.thread-open { grid-template-columns:248px minmax(0,1fr); }
  .thread-panel { position:fixed; inset:0 0 0 auto; width:min(100%,480px); z-index:1040; box-shadow:-12px 0 30px #0f172a1a; }
+ .thread-resizer, .thread-expand-button { display:none; }
 }
 @media(max-width:640px) {
  .thread-panel { width:100%; }

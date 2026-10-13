@@ -225,7 +225,7 @@ function threadMessage(message) {
         head.append(mine);
     }
     head.append(document.createTextNode(` · ${new Date(message.ts).toLocaleString("ja-JP")}`));
-    text.append(message.withdrawnAt ? withdrawnNotice(message) : fragment(messageDisplayText(message)));
+    text.append(renderMessageText(message));
     if (!message.withdrawnAt && message.attachments && message.attachments.length) {
         const atts = renderAttachments(message.attachments);
         if (atts) text.append(atts);
@@ -539,3 +539,101 @@ function updateThreadBackground() {
     syncMobileChannelNav();
 }
 window.matchMedia("(max-width:1050px)").addEventListener("change",updateThreadBackground);
+
+function initThreadResize() {
+    const resizer = $("threadResizer");
+    const expandBtn = $("threadExpandBtn");
+    const defaultWidth = 420;
+    const minWidth = 340;
+    let isWide = false;
+    let previousWidth = null;
+
+    const savedWidth = localStorage.getItem("minihub_thread_width");
+    if (savedWidth) {
+        document.documentElement.style.setProperty("--thread-width", savedWidth);
+        const parsedPx = parseInt(savedWidth, 10);
+        if (parsedPx >= 650) {
+            updateExpandIcon(true);
+        }
+    }
+
+    function setWidth(widthPx) {
+        document.documentElement.style.setProperty("--thread-width", `${widthPx}px`);
+        localStorage.setItem("minihub_thread_width", `${widthPx}px`);
+    }
+
+    function updateExpandIcon(wide) {
+        isWide = wide;
+        if (!expandBtn) return;
+        const iconUse = expandBtn.querySelector("use");
+        if (iconUse) {
+            const iconName = wide ? "arrows-angle-contract" : "arrows-angle-expand";
+            iconUse.setAttribute("href", Minihub.url(`/vendor/bootstrap-icons/bootstrap-icons.svg#${iconName}`));
+        }
+        expandBtn.setAttribute("aria-label", wide ? "返信カラムを標準幅に戻す" : "返信カラムを広げる");
+        expandBtn.title = wide ? "返信カラムを標準幅に戻す" : "返信カラムを広げる";
+    }
+
+    if (expandBtn) {
+        expandBtn.onclick = () => {
+            if (isWide) {
+                const target = previousWidth || defaultWidth;
+                setWidth(target);
+                updateExpandIcon(false);
+            } else {
+                const currentPx = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--thread-width"), 10) || defaultWidth;
+                previousWidth = currentPx;
+                const maxAvailable = window.innerWidth - 480;
+                const wideTarget = Math.max(minWidth, Math.min(Math.round(window.innerWidth * 0.6), maxAvailable, 800));
+                setWidth(wideTarget);
+                updateExpandIcon(true);
+            }
+        };
+    }
+
+    if (resizer) {
+        let isResizing = false;
+
+        const onMouseMove = (e) => {
+            if (!isResizing) return;
+            const rightDist = window.innerWidth - e.clientX;
+            const maxWidth = Math.max(minWidth, window.innerWidth - 480);
+            const clamped = Math.min(Math.max(rightDist, minWidth), maxWidth);
+            document.documentElement.style.setProperty("--thread-width", `${clamped}px`);
+        };
+
+        const onMouseUp = () => {
+            if (!isResizing) return;
+            isResizing = false;
+            document.body.classList.remove("thread-col-resizing");
+            resizer.classList.remove("is-resizing");
+            window.removeEventListener("mousemove", onMouseMove);
+            window.removeEventListener("mouseup", onMouseUp);
+
+            const finalPx = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--thread-width"), 10);
+            if (finalPx) {
+                localStorage.setItem("minihub_thread_width", `${finalPx}px`);
+                updateExpandIcon(finalPx >= 650);
+            }
+        };
+
+        resizer.addEventListener("mousedown", (e) => {
+            if (window.innerWidth <= 1050) return;
+            e.preventDefault();
+            isResizing = true;
+            document.body.classList.add("thread-col-resizing");
+            resizer.classList.add("is-resizing");
+            window.addEventListener("mousemove", onMouseMove);
+            window.addEventListener("mouseup", onMouseUp);
+        });
+
+        resizer.addEventListener("dblclick", () => {
+            document.documentElement.style.setProperty("--thread-width", "var(--thread-default-width)");
+            localStorage.removeItem("minihub_thread_width");
+            previousWidth = null;
+            updateExpandIcon(false);
+        });
+    }
+}
+initThreadResize();
+

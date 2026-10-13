@@ -95,7 +95,7 @@ func TestHandlerSeparatesLoginAndApplication(t *testing.T) {
 		if !strings.Contains(passwordButton, `viewBox="0 0 16 16"`) || strings.Contains(passwordButton, `<use`) {
 			t.Fatal("password-change key icon is not embedded in its button")
 		}
-		for _, expected := range []string{"bootstrap.min.css", "bootstrap.bundle.min.js", "bootstrap-icons.svg", `id="toastContainer"`, `class="modal fade"`, `/favicon.svg`, `/favicon.ico`, `name="theme-color" content="#334155"`} {
+		for _, expected := range []string{"bootstrap.min.css", "bootstrap.bundle.min.js", "bootstrap-icons.svg", "marked.min.js", `id="threadResizer"`, `id="threadExpandBtn"`, `id="toastContainer"`, `class="modal fade"`, `/favicon.svg`, `/favicon.ico`, `name="theme-color" content="#334155"`} {
 			if !strings.Contains(body, expected) {
 				t.Fatalf("application HTML does not contain %q", expected)
 			}
@@ -844,6 +844,21 @@ func TestPagesRejectUnsupportedMethods(t *testing.T) {
 	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/login", nil))
 	if recorder.Code != http.StatusMethodNotAllowed || recorder.Header().Get("Allow") != "GET, HEAD" {
 		t.Fatalf("status=%d allow=%q", recorder.Code, recorder.Header().Get("Allow"))
+	}
+}
+
+func TestMarkedVendorScriptIsServed(t *testing.T) {
+	handler := Handler(testAuthenticator(true))
+	recorder := request(t, handler, "/vendor/marked/marked.min.js")
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("marked.min.js status=%d", recorder.Code)
+	}
+	contentType := recorder.Header().Get("Content-Type")
+	if !strings.Contains(contentType, "javascript") && !strings.Contains(contentType, "text/") {
+		t.Fatalf("unexpected content type: %q", contentType)
+	}
+	if !strings.Contains(recorder.Body.String(), "marked") {
+		t.Fatal("marked script content missing")
 	}
 }
 
