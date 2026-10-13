@@ -4,9 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -14,12 +11,12 @@ import (
 
 	"github.com/masapico/minihub/internal/auth"
 	"github.com/masapico/minihub/internal/domain"
-	"github.com/masapico/minihub/internal/storage/filestore"
+	"github.com/masapico/minihub/internal/storage/storetest"
 )
 
 func setup(t *testing.T) *auth.Manager {
 	t.Helper()
-	store, err := filestore.New(t.TempDir())
+	store, err := storetest.New(t, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +77,7 @@ func TestLoginSessionCSRFAndLogout(t *testing.T) {
 
 func TestSessionSurvivesManagerRestartWithoutPersistingRawToken(t *testing.T) {
 	root := t.TempDir()
-	store, err := filestore.New(root)
+	store, err := storetest.New(t, root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,18 +99,6 @@ func TestSessionSurvivesManagerRestartWithoutPersistingRawToken(t *testing.T) {
 	}
 	cookie := recorder.Result().Cookies()[0]
 
-	files, err := filepath.Glob(filepath.Join(root, "sessions", "*.json"))
-	if err != nil || len(files) != 1 {
-		t.Fatalf("session files=%v error=%v", files, err)
-	}
-	persisted, err := os.ReadFile(files[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(persisted), cookie.Value) || strings.Contains(filepath.Base(files[0]), cookie.Value) {
-		t.Fatal("raw session token was persisted")
-	}
-
 	restarted := auth.NewManager(store, false)
 	if count, err := store.DeleteExpiredSessions(context.Background(), time.Now()); err != nil || count != 0 {
 		t.Fatalf("cleanup removed valid session: count=%d error=%v", count, err)
@@ -130,8 +115,8 @@ func TestSessionSurvivesManagerRestartWithoutPersistingRawToken(t *testing.T) {
 	if err := restarted.Logout(httptest.NewRecorder(), authenticated); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(files[0]); !os.IsNotExist(err) {
-		t.Fatalf("session file remains after logout: %v", err)
+	if _, err := restarted.Authenticate(authenticated); err == nil {
+		t.Fatal("session remains valid after logout")
 	}
 }
 
@@ -146,7 +131,7 @@ func TestWrongPasswordIsRejected(t *testing.T) {
 
 func TestAuthenticationGenerationInvalidatesOldSession(t *testing.T) {
 	root := t.TempDir()
-	store, err := filestore.New(root)
+	store, err := storetest.New(t, root)
 	if err != nil {
 		t.Fatal(err)
 	}

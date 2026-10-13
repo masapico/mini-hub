@@ -3,11 +3,8 @@ package service
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/masapico/minihub/internal/domain"
 	"github.com/masapico/minihub/internal/storage/storetest"
@@ -29,7 +26,6 @@ func setupTestService(t *testing.T) (*Service, context.Context, string, string) 
 		}
 	}
 	s := New(store)
-	s.SetAttachmentsDir(filepath.Join(t.TempDir(), "attachments"))
 	ch, err := s.CreateChannel(ctx, "admin", domain.Channel{
 		ID:      "general",
 		Name:    "General",
@@ -100,10 +96,8 @@ func TestAttachmentRequireAIMention(t *testing.T) {
 	if len(msg.Attachments) != 1 || msg.Attachments[0].ID != summary.ID {
 		t.Fatalf("expected message to have attachment, got: %+v", msg.Attachments)
 	}
-
-	// Verify attachment file exists on disk
-	if _, err := os.Stat(msg.Attachments[0].Path); err != nil {
-		t.Fatalf("expected attachment file to exist on disk at %s: %v", msg.Attachments[0].Path, err)
+	if msg.Attachments[0].Path != "" {
+		t.Fatalf("expected Path to be empty (no host file storage), got: %s", msg.Attachments[0].Path)
 	}
 
 	// Staged attachment should be consumed; second use must fail
@@ -112,37 +106,3 @@ func TestAttachmentRequireAIMention(t *testing.T) {
 		t.Fatalf("expected ErrNotFound for already consumed attachment, got: %v", err)
 	}
 }
-
-func TestAttachmentCleanup(t *testing.T) {
-	s, _, _, _ := setupTestService(t)
-	baseDir := s.AttachmentsDir()
-
-	// Create directories representing past and current days
-	pastDay := filepath.Join(baseDir, "2026-01-01")
-	today := filepath.Join(baseDir, time.Now().Format("2006-01-02"))
-	if err := os.MkdirAll(pastDay, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(today, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	_ = os.WriteFile(filepath.Join(pastDay, "old.xlsx"), []byte("old"), 0o600)
-	_ = os.WriteFile(filepath.Join(today, "today.xlsx"), []byte("today"), 0o600)
-
-	deleted, err := s.CleanupAttachments(time.Now())
-	if err != nil {
-		t.Fatalf("CleanupAttachments failed: %v", err)
-	}
-	if deleted != 1 {
-		t.Fatalf("expected 1 past day directory deleted, got %d", deleted)
-	}
-
-	// Verify past directory is gone, today directory is preserved
-	if _, err := os.Stat(pastDay); !os.IsNotExist(err) {
-		t.Fatalf("expected pastDay to be deleted, but still exists")
-	}
-	if _, err := os.Stat(today); err != nil {
-		t.Fatalf("expected today directory to be preserved, got error: %v", err)
-	}
-}
-

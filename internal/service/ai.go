@@ -13,10 +13,10 @@ import (
 	"mime"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/masapico/minihub/internal/config"
 	"github.com/masapico/minihub/internal/domain"
@@ -25,6 +25,7 @@ import (
 
 const aiMaxContextBytes = 1024 * 1024
 const aiMaxContextMessages = 1000
+const aiMaxAttachmentRequestBytes = 70 * 1024 * 1024
 
 type AIAccountSummary struct {
 	ID   string `json:"id"`
@@ -40,6 +41,7 @@ type aiJob struct {
 	account             aiEndpoint
 	author, channel, id string
 	trigger             domain.Message
+	attachments         []AIAttachmentPayload
 }
 
 type aiDispatcher struct {
@@ -131,7 +133,7 @@ func (s *Service) AIAccounts(ctx context.Context, userID string) ([]AIAccountSum
 	return result, nil
 }
 
-func (s *Service) enqueueAI(author, channel string, m domain.Message) {
+func (s *Service) enqueueAI(author, channel string, m domain.Message, attPayloads ...AIAttachmentPayload) {
 	d := s.ai
 	if d == nil || m.AI != nil || d.ctx.Err() != nil {
 		return
@@ -151,7 +153,7 @@ func (s *Service) enqueueAI(author, channel string, m domain.Message) {
 			d.logger.Error("create AI request identifier", "channelId", channel)
 			continue
 		}
-		job := aiJob{account: a, author: author, channel: channel, id: hex.EncodeToString(id[:]), trigger: m}
+		job := aiJob{account: a, author: author, channel: channel, id: hex.EncodeToString(id[:]), trigger: m, attachments: attPayloads}
 		select {
 		case <-d.ctx.Done():
 			return
@@ -189,9 +191,16 @@ func (s *Service) validateAIJob(ctx context.Context, j aiJob) error {
 	return nil
 }
 
+type aiContentPart struct {
+	Type string `json:"type"`
+	Text string `json:"text,omitempty"`
+	Name string `json:"name,omitempty"`
+	Data string `json:"data,omitempty"`
+}
+
 type aiContextMessage struct {
 	Role    string `json:"role"`
-	Content string `json:"content"`
+	Content any    `json:"content"`
 }
 type aiRequest struct {
 	Model    string             `json:"model"`
@@ -217,6 +226,10 @@ func (s *Service) aiPayload(ctx context.Context, j aiJob) ([]byte, error) {
 	if strings.TrimSpace(j.account.SystemPrompt) != "" {
 		p.Messages = append(p.Messages, aiContextMessage{Role: "system", Content: j.account.SystemPrompt})
 	}
+	maxBytes := aiMaxContextBytes
+	if len(j.attachments) > 0 {
+		maxBytes = aiMaxAttachmentRequestBytes
+	}
 	total := 0
 	count := 0
 	add := func(m domain.Message) error {
@@ -231,11 +244,12 @@ func (s *Service) aiPayload(ctx context.Context, j aiJob) ([]byte, error) {
 		if m.WithdrawnAt != nil || (m.AI != nil && m.AI.Kind == "error") {
 			return nil
 		}
+		isTrigger := (m.Seq == j.trigger.Seq && m.ID == j.trigger.ID)
 		text := m.Text
 		if len(m.Attachments) > 0 {
 			var tags []string
 			for _, att := range m.Attachments {
-				tags = append(tags, fmt.Sprintf("[添付ファイル: %s]", filepath.ToSlash(att.Path)))
+				tags = append(tags, fmt.Sprintf("[添付ファイル: %s]", att.Filename))
 			}
 			text = text + "\n" + strings.Join(tags, "\n")
 		}
@@ -250,14 +264,34 @@ func (s *Service) aiPayload(ctx context.Context, j aiJob) ([]byte, error) {
 			if name == "" {
 				name = id
 			}
-			item.Content = fmt.Sprintf("%s (%s):\n%s", name, id, text)
+			prefix := ""
+			if isTrigger {
+				nowStr := time.Now().Format("2006-01-02 15:04:05 MST")
+				prefix = fmt.Sprintf("[現在日時: %s]\n", nowStr)
+			}
+			userText := fmt.Sprintf("%s%s (%s):\n%s", prefix, name, id, text)
+			if isTrigger && len(j.attachments) > 0 {
+				parts := []aiContentPart{
+					{Type: "text", Text: userText},
+				}
+				for _, att := range j.attachments {
+					parts = append(parts, aiContentPart{
+						Type: "file",
+						Name: att.Name,
+						Data: att.Base64,
+					})
+				}
+				item.Content = parts
+			} else {
+				item.Content = userText
+			}
 		}
 		encoded, err := json.Marshal(item)
 		if err != nil {
 			return err
 		}
 		total += len(encoded)
-		if total > aiMaxContextBytes {
+		if total > maxBytes {
 			return errAIContextLimit
 		}
 		p.Messages = append(p.Messages, item)
@@ -298,7 +332,7 @@ func (s *Service) aiPayload(ctx context.Context, j aiJob) ([]byte, error) {
 		}
 	}
 	b, err := json.Marshal(p)
-	if len(b) > aiMaxContextBytes {
+	if len(b) > maxBytes {
 		return nil, errAIContextLimit
 	}
 	return b, err

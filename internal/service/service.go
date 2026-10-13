@@ -162,7 +162,7 @@ func New(store storage.Storage) *Service {
 func NewWithOptions(store storage.Storage, selfPasswordChange bool, mentionRetention time.Duration) *Service {
 	return &Service{
 		storage:            store,
-		attachmentMgr:      newAttachmentManager(""),
+		attachmentMgr:      newAttachmentManager(),
 		locks:              make(map[string]*sync.Mutex),
 		presenceMembers:    make(map[string][]string),
 		selfPasswordChange: selfPasswordChange,
@@ -1138,12 +1138,13 @@ func (s *Service) PostMessage(ctx context.Context, userID, channelID, text strin
 		return domain.Message{}, fmt.Errorf("%w: メッセージは空にせず、%dバイト以内にしてください", ErrInvalid, MaxMessageBytes)
 	}
 	var attachments []domain.Attachment
+	var attachmentPayloads []AIAttachmentPayload
 	if len(attachmentIDs) > 0 {
 		if !hasAIMention(text) {
 			return domain.Message{}, fmt.Errorf("%w: ファイル添付はAIへのメンション（@ai:...）時のみ利用できます", ErrInvalid)
 		}
 		var err error
-		attachments, err = s.consumeStagedAttachments(userID, channelID, attachmentIDs)
+		attachments, attachmentPayloads, err = s.consumeStagedAttachments(userID, channelID, attachmentIDs)
 		if err != nil {
 			return domain.Message{}, err
 		}
@@ -1160,7 +1161,7 @@ func (s *Service) PostMessage(ctx context.Context, userID, channelID, text strin
 	if s.publisher != nil {
 		s.publisher.NewMessage(ctx, channelID, message.Seq)
 	}
-	s.enqueueAI(userID, channelID, message)
+	s.enqueueAI(userID, channelID, message, attachmentPayloads...)
 	if readErr != nil {
 		return message, &CommittedMessageError{Err: fmt.Errorf("advance author read state: %w", readErr)}
 	}

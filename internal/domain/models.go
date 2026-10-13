@@ -64,7 +64,7 @@ type Attachment struct {
 	ID       string `json:"id"`
 	Filename string `json:"filename"`
 	Size     int64  `json:"size"`
-	Path     string `json:"path"`
+	Path     string `json:"path,omitempty"`
 }
 
 type Message struct {

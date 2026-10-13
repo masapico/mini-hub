@@ -3,58 +3,38 @@ package sqlitestore
 import (
 	"context"
 	"database/sql"
-	"github.com/masapico/minihub/internal/domain"
-	"github.com/masapico/minihub/internal/storage/filestore"
 	"path/filepath"
-	"reflect"
 	"testing"
+
+	"github.com/masapico/minihub/internal/domain"
 )
 
-func TestPollStorageParity(t *testing.T) {
+func TestPollStorage(t *testing.T) {
 	ctx := context.Background()
-	f, err := filestore.New(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
 	s := testStore(t)
 	poll := &domain.Poll{ID: "poll1", ChannelID: "c", Question: "Q", Options: []domain.PollOption{{ID: "o1", Text: "A"}, {ID: "o2", Text: "B"}}, Status: "open"}
-	for _, st := range []interface {
-		SavePoll(context.Context, *domain.Poll) error
-		AddPollResponse(context.Context, string, domain.PollResponse) (domain.PollResponse, error)
-		ListPollResponses(context.Context, string) ([]domain.PollResponse, error)
-		GetPoll(context.Context, string) (*domain.Poll, error)
-	}{f, s} {
-		copy := *poll
-		if err := st.SavePoll(ctx, &copy); err != nil {
+	copy := *poll
+	if err := s.SavePoll(ctx, &copy); err != nil {
+		t.Fatal(err)
+	}
+	for _, choice := range []string{"o1", "o2"} {
+		if _, err := s.AddPollResponse(ctx, poll.ID, domain.PollResponse{UserID: "u", OptionIDs: []string{choice}}); err != nil {
 			t.Fatal(err)
 		}
-		for _, choice := range []string{"o1", "o2"} {
-			if _, err := st.AddPollResponse(ctx, poll.ID, domain.PollResponse{UserID: "u", OptionIDs: []string{choice}}); err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
-	a, e := f.ListPollResponses(ctx, poll.ID)
-	if e != nil {
-		t.Fatal(e)
 	}
 	b, e := s.ListPollResponses(ctx, poll.ID)
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(a) != 1 || len(b) != 1 || a[0].Seq != 2 || b[0].Seq != 2 || a[0].OptionIDs[0] != "o2" || b[0].OptionIDs[0] != "o2" {
-		t.Fatalf("file=%+v sqlite=%+v", a, b)
-	}
-	pa, e := f.GetPoll(ctx, poll.ID)
-	if e != nil {
-		t.Fatal(e)
+	if len(b) != 1 || b[0].Seq != 2 || b[0].OptionIDs[0] != "o2" {
+		t.Fatalf("sqlite=%+v", b)
 	}
 	pb, e := s.GetPoll(ctx, poll.ID)
 	if e != nil {
 		t.Fatal(e)
 	}
-	if !reflect.DeepEqual(pa, pb) {
-		t.Fatalf("poll mismatch: %+v / %+v", pa, pb)
+	if pb.Question != "Q" || len(pb.Options) != 2 {
+		t.Fatalf("poll mismatch: %+v", pb)
 	}
 }
 

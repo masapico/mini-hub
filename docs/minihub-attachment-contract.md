@@ -1,17 +1,20 @@
-# minihub × TEGO-core 添付ファイル連携仕様・インターフェース規約書
+# minihub × AI連携・添付ファイル仕様・インターフェース規約書
 
-本ドキュメントは、業務チャットツール **minihub** において、ユーザーがAIメンション時にファイルを添付した場合、バックエンド **TEGO-core** に対してどのような形式でデータを渡すべきかを定義した連携インターフェース規約書です。
+本ドキュメントは、業務チャットツール **minihub** において、ユーザーがAIメンション時にファイルを添付した場合、OpenAI互換リクエスト対応のAIサービスに対してどのような形式でデータを渡すかを定義した連携インターフェース規約書です。
 
 ---
 
 ## 1. 基本方針
 
-1. **OpenAI Chat Completions 互換プロトコルの維持**
-   - minihub の既存 AI 連携仕様（`POST /v1/chat/completions`）のデータ構造（JSON スキーマ）を変更せず、そのまま利用します。
-2. **メッセージ本文（`content`）への参照メタデータ埋め込み方式**
-   - minihub は投稿添付ファイルをサーバー上のストレージに保存した上で、ユーザー発言の `content` 内に「添付ファイルのアクセス情報」を所定の記法で埋め込んで送信します。
-3. **TEGO-core 側での自動抽出 & テキスト化**
-   - TEGO-core は本文中の添付ファイル記法を検知し、Microsoft `markitdown` を用いて Markdown 構造化テキストへ自動変換した上で、LLM（Amazon Bedrock）のコンテキストに注入します。
+1. **OpenAI Chat Completions 互換プロトコルの Content Parts 方式（Base64）**
+   - 添付ファイルは、OpenAI互換 API のメッセージ本文（`content`）における Content Parts 配列形式（`type: "file"`、Base64データ）として直接リクエストペイロード内に含めて送信します。
+2. **minihub ホスト内のファイル非保持（インメモリ・ステートレス）**
+   - 添付ファイルは minihub サーバーのディスクストレージには一切保存されません。メモリ上で一時ステージングされ、投稿保存時に Base64 化されて AI 連携キューに渡された後、即座にメモリから解放・破棄されます。
+   - これにより、サーバーディスク容量の圧迫や起動時・定期的なファイル削除バッチが不要となり、運用が極めて簡潔になります。
+3. **基準日時（サーバーローカルタイム）の送信時付与**
+   - LLM に現在日時を把握させるため、トリガーメッセージ（呼び出し投稿）のユーザー発言テキスト先頭にサーバーのローカルタイム（例: `[現在日時: 2026-10-13 15:00:00 JST]\n`）が送信時のみ自動付与されます（データベース内のメッセージ本文には保存されません）。
+4. **スレッド過去メッセージの添付ファイルの軽量化**
+   - スレッド内の過去メッセージに添付があった場合、コンテキスト肥大化およびトークン浪費を防ぐため、過去メッセージの Base64 データは再送しません。テキスト末尾に `[添付ファイル: <ファイル名>]` のタグを付与して送信します。
 
 ---
 
@@ -25,53 +28,37 @@
 | `X-MiniHub-Request-ID` | 必須 | minihub の一意な依頼ID（UUID等、ログ追跡用） |
 | `Authorization` | 任意 | `minihub.json` にトークンが設定されている場合、`Bearer <token>` |
 
-### 2.2 エンドポイント
-- `POST {TEGO_CORE_BASE_URL}/v1/chat/completions`
-  - （例: `http://127.0.0.1:8000/v1/chat/completions`）
+### 2.2 リクエストサイズ上限
+- **添付ファイルあり**: 最大 **70 MiB**（Base64 エンコードに伴う容量増を許容）
+- **添付ファイルなし**: 最大 **1 MiB**
+
+### 2.3 エンドポイント
+- `POST {AI_SERVICE_BASE_URL}/v1/chat/completions`
 
 ---
 
-## 3. 添付ファイル埋め込み記法規約
+## 3. メッセージ構造仕様（Content Parts）
 
-ユーザーメッセージ（`role: "user"`）の `content` 末尾に、以下のタグを付与してください。
+添付ファイルがある呼び出し投稿（トリガーメッセージ）の `messages` 内の `content` は、文字列ではなく以下の要素オブジェクトの配列（Content Parts）になります。
 
-### ① 単一ファイルの場合
-```
-[添付ファイル: <ファイルパスまたは内部URL>]
-```
-または
-```
-[添付: <ファイルパスまたは内部URL>]
-```
+### 3.1 テキストパート (`type: "text"`)
+- `type`: `"text"`
+- `text`: 発言者名、基準日時、ユーザー本文を含むテキスト。
 
-### ② 複数ファイルの場合
-改行区切りで複数指定が可能です。
-```
-[添付ファイル: <ファイルパス1>]
-[添付ファイル: <ファイルパス2>]
-```
+### 3.2 ファイルパート (`type: "file"`)
+- `type`: `"file"`
+- `name`: アップロード時のファイル名（例: `sales_report.xlsx`）
+- `data`: ファイル内容全体の Base64 エンコード文字列
 
 ---
 
-## 4. ファイルパスの指定基準
+## 4. 対応ファイル形式
 
-minihub から TEGO-core へ渡すパスは、以下のいずれかの形式とします。
-
-| 方式 | パス形式の例 | 推奨ユースケース | 注意点 |
-| :--- | :--- | :--- | :--- |
-| **A. ローカル絶対パス (推奨)** | `C:/minihub/storage/attachments/202610/uuid_report.xlsx` | minihub と TEGO-core が同一 Windows Server 上で動作する場合 | Windows のバックスラッシュ（`\`）およびスラッシュ（`/`）の双方向に対応。TEGO-core サービス実行権限で読み取り可能であること。 |
-| **B. 内部 HTTP/HTTPS URL** | `http://127.0.0.1:8080/api/files/download/uuid_report.pdf` | minihub と TEGO-core が別サーバーまたはコンテナ分離されている場合 | 認証不要で内部ネットワークから直接取得できるエンドポイントであること。 |
-
----
-
-## 5. 対応ファイル形式
-
-TEGO-core 内蔵の `markitdown` エンジンにより、以下のファイル形式が自動で Markdown へテキスト抽出されます。
-
+添付可能なファイル拡張子（最大5件、1ファイル20MB・合計50MB以内）：
 - **Microsoft Office**:
-  - Excel（`.xlsx`, `.xls`）: 表組みを Markdown テーブルとして高精度に抽出
-  - Word（`.docx`, `.doc`）: 見出し・段落構造を Markdown として抽出
-  - PowerPoint（`.pptx`, `.ppt`）: スライドごとのテキスト抽出
+  - Excel（`.xlsx`, `.xls`）
+  - Word（`.docx`, `.doc`）
+  - PowerPoint（`.pptx`, `.ppt`）
 - **ドキュメント**:
   - PDF（`.pdf`）
 - **プレーンテキスト / データ**:
@@ -79,12 +66,12 @@ TEGO-core 内蔵の `markitdown` エンジンにより、以下のファイル�
 
 ---
 
-## 6. リクエスト JSON の具体例
+## 5. リクエスト JSON の具体例
 
 ### 例1: 単一の Excel ファイルが添付された場合
 ```json
 {
-  "model": "openai.gpt-oss-20b-1:0",
+  "model": "local-model",
   "stream": false,
   "messages": [
     {
@@ -93,16 +80,27 @@ TEGO-core 内蔵の `markitdown` エンジンにより、以下のファイル�
     },
     {
       "role": "user",
-      "content": "山田 太郎 (yamada_t):\n@ai:assistant この売上データを分析して、先月比の成長要因を箇条書きで教えてください。\n[添付ファイル: C:/minihub/storage/files/202610_sales.xlsx]"
+      "content": [
+        {
+          "type": "text",
+          "text": "山田 太郎 (yamada_t):\n[現在日時: 2026-10-13 15:00:00 JST]\n@ai:assistant この売上データを分析して、先月比の成長要因を箇条書きで教えてください。"
+        },
+        {
+          "type": "file",
+          "name": "sales_report.xlsx",
+          "data": "UEsDBBQACAgIAI1pSVkAAAAAAAAAAAAAAA..."
+        }
+      ]
     }
   ]
 }
 ```
 
 ### 例2: スレッド履歴＋複数ファイルが添付された場合
+（スレッド過去メッセージの添付はテキスト末尾にファイル名のみ、最新のトリガーメッセージは Base64 の Content Parts）
 ```json
 {
-  "model": "openai.gpt-oss-20b-1:0",
+  "model": "local-model",
   "stream": false,
   "messages": [
     {
@@ -111,15 +109,30 @@ TEGO-core 内蔵の `markitdown` エンジンにより、以下のファイル�
     },
     {
       "role": "user",
-      "content": "山田 太郎 (yamada_t):\n@ai:assistant 営業提案書のレビューをお願いします。"
+      "content": "山田 太郎 (yamada_t):\n@ai:assistant 営業提案書のレビューをお願いします。\n[添付ファイル: proposal_draft.docx]"
     },
     {
       "role": "assistant",
-      "content": "承知いたしました。提案書ファイルまたは詳細をお知らせください。"
+      "content": "承知いたしました。提案書と追加資料をお知らせください。"
     },
     {
       "role": "user",
-      "content": "佐藤 花子 (sato_h):\n@ai:assistant 以下の2点を添付します。確認してください。\n[添付ファイル: C:/minihub/storage/files/proposal_draft.docx]\n[添付ファイル: C:/minihub/storage/files/cost_estimate.pdf]"
+      "content": [
+        {
+          "type": "text",
+          "text": "佐藤 花子 (sato_h):\n[現在日時: 2026-10-13 15:05:00 JST]\n@ai:assistant 以下の2点を添付します。確認してください。"
+        },
+        {
+          "type": "file",
+          "name": "proposal_v2.docx",
+          "data": "UEsDBBQACAgI..."
+        },
+        {
+          "type": "file",
+          "name": "cost_estimate.pdf",
+          "data": "JVBERi0xLjQK..."
+        }
+      ]
     }
   ]
 }
@@ -127,34 +140,22 @@ TEGO-core 内蔵の `markitdown` エンジンにより、以下のファイル�
 
 ---
 
-## 7. TEGO-core 側での処理とレスポンス仕様
+## 6. AI サービス側のレスポンス仕様
 
-### 7.1 TEGO-core 側での処理パイプライン
-1. `messages` の末尾から `[添付ファイル: ...]` を検出。
-2. ファイルを読み込み、Markdown へテキスト変換。
-3. 変換テキストをプロンプトのコンテキストブロックとして合成:
-   ```text
-   --- 添付ファイル内容 (proposal_draft.docx) ---
-   # 業務提案書
-   ...
-   ----------------------------------------------
-   ```
-4. Amazon Bedrock Converse API に渡して回答生成。
-
-### 7.2 レスポンス形式 (200 OK)
-minihub の標準仕様に準拠した形式で返却されます。
+### 6.1 レスポンス形式 (200 OK)
+minihub の標準仕様に準拠した形式で返却します。
 ```json
 {
   "id": "chatcmpl-xxxxxxxxxxxx",
   "object": "chat.completion",
-  "created": 1728362400,
-  "model": "openai.gpt-oss-20b-1:0",
+  "created": 1728800000,
+  "model": "local-model",
   "choices": [
     {
       "index": 0,
       "message": {
         "role": "assistant",
-        "content": "添付いただいた提案書と概算見積もりを確認しました。以下の改善点を提案します。\n1. ..."
+        "content": "添付いただいた資料を確認しました。以下の改善点を提案します。\n1. ..."
       },
       "finish_reason": "stop"
     }
@@ -167,20 +168,16 @@ minihub の標準仕様に準拠した形式で返却されます。
 }
 ```
 
-### 7.3 エラー・例外時のフォールバック保証
-- **ファイルが存在しない / 変換失敗時**:
-  TEGO-core は `500 Internal Server Error` で異常終了せず、プロンプト内に `[添付ファイル読み込みエラー: ファイルが見つかりませんでした]` という注記を補完して回答を生成します。そのため、minihub 側のチャットが定型エラーで停止することはありません。
-- **回答サイズ上限**:
-  minihub の仕様である **UTF-8 16 KiB** を超えないよう、超過時は自動でトリミングされます。
+### 6.2 回答サイズ上限
+- 回答本文は UTF-8 で **16 KiB** 以内です。
 
 ---
 
-## 8. minihub 実装時の留意点
+## 7. minihub 実装仕様の要約
 
-1. **API 送信前のファイル書き出し完了**:
-   minihub が TEGO-core へ POST する前に、添付ファイルがディスクストレージへ完全にフラッシュ（同期保存）されていることを確認してください。
-2. **タイムアウト設定**:
-   大容量の Office/PDF ファイルのテキスト抽出と推論には数秒〜十数秒要する場合があります。`minihub.json` の `timeout` は既定の `120s`（または長め）を維持してください。
-3. **ファイル保存期間とクリーンアップ**:
-   TEGO-core はステートレスにファイルを読み取ります。一時ファイルの保持・削除ポリシーは minihub 側の既存ストレージ管理ルールに従ってください。
-
+1. **ホスト内ファイル完全非保持**:
+   minihub ホストのローカルディスクに添付ファイルは保存されません。
+2. **ステートレスな Base64 連携**:
+   アップロード受領時にメモリ上で Base64 化し、キュー経由で OpenAI 互換 API への POST 完了後に破棄されます。
+3. **タイムアウト設定**:
+   大容量ファイルの Base64 転送や推論を考慮し、`minihub.json` の `timeout`（既定 `120s`）を適切に設定してください。

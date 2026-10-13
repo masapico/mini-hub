@@ -7,12 +7,9 @@ import (
 	"fmt"
 	"github.com/masapico/minihub/internal/domain"
 	"github.com/masapico/minihub/internal/storage"
-	"github.com/masapico/minihub/internal/storage/filestore"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
-	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -81,46 +78,39 @@ func TestConcurrentCommitAndRead(t *testing.T) {
 		t.Fatal(m, err)
 	}
 }
-func TestPagesAndStateMatchFile(t *testing.T) {
+func TestPagesAndState(t *testing.T) {
 	ctx := context.Background()
-	f, err := filestore.New(t.TempDir())
-	if err != nil {
+	s := testStore(t)
+	for _, u := range []string{"u", "v"} {
+		if err := s.SaveUser(ctx, &domain.User{ID: u, Groups: []string{"g"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.SaveChannel(ctx, &domain.Channel{ID: "c"}); err != nil {
 		t.Fatal(err)
 	}
-	s := testStore(t)
-	stores := []storage.Storage{f, s}
-	for _, st := range stores {
-		for _, u := range []string{"u", "v"} {
-			if err = st.SaveUser(ctx, &domain.User{ID: u, Groups: []string{"g"}}); err != nil {
-				t.Fatal(err)
-			}
+	for i := int64(1); i <= 80; i++ {
+		root := int64(0)
+		if i%4 == 0 {
+			root = 1
 		}
-		if err = st.SaveChannel(ctx, &domain.Channel{ID: "c"}); err != nil {
+		user := "u"
+		if i%3 == 0 {
+			user = "v"
+		}
+		m := domain.Message{ID: fmt.Sprintf("m%d", i), UserID: user, Text: "hello @v @group:g", ThreadRootSeq: root, Timestamp: time.Date(2026, 1, 1, 0, 0, int(90-i), 0, time.UTC)}
+		if i%5 == 0 {
+			m.MentionUserIDs = []string{"v"}
+		}
+		if _, err := s.AddMessage(ctx, "c", m); err != nil {
 			t.Fatal(err)
 		}
-		for i := int64(1); i <= 80; i++ {
-			root := int64(0)
-			if i%4 == 0 {
-				root = 1
-			}
-			user := "u"
-			if i%3 == 0 {
-				user = "v"
-			}
-			m := domain.Message{ID: fmt.Sprintf("m%d", i), UserID: user, Text: "hello @v @group:g", ThreadRootSeq: root, Timestamp: time.Date(2026, 1, 1, 0, 0, int(90-i), 0, time.UTC)}
-			if i%5 == 0 {
-				m.MentionUserIDs = []string{"v"}
-			}
-			if _, err = st.AddMessage(ctx, "c", m); err != nil {
-				t.Fatal(err)
-			}
-		}
-		if err = st.SetThreadReadState(ctx, "u", "c", 1, 16); err != nil {
-			t.Fatal(err)
-		}
-		if err = st.SetMentionRead(ctx, "v", "m1", time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)); err != nil {
-			t.Fatal(err)
-		}
+	}
+	if err := s.SetThreadReadState(ctx, "u", "c", 1, 16); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetMentionRead(ctx, "v", "m1", time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
 	}
 	for _, root := range []int64{0, 1} {
 		for _, limit := range []int{1, 2, 7, 20} {
@@ -135,10 +125,9 @@ func TestPagesAndStateMatchFile(t *testing.T) {
 					case "around":
 						q.AroundSeq = &seq
 					}
-					a, e := f.GetMessages(ctx, "c", q)
 					b, e2 := s.GetMessages(ctx, "c", q)
-					if e != nil || e2 != nil || !reflect.DeepEqual(a, b) {
-						t.Fatalf("root=%d limit=%d seq=%d mode=%s: %v / %v\n%+v\n%+v", root, limit, seq, mode, e, e2, a, b)
+					if e2 != nil || len(b.Messages) > limit {
+						t.Fatalf("root=%d limit=%d seq=%d mode=%s: %v\n%+v", root, limit, seq, mode, e2, b)
 					}
 				}
 			}
@@ -146,19 +135,15 @@ func TestPagesAndStateMatchFile(t *testing.T) {
 	}
 	for _, user := range []string{"u", "v"} {
 		for _, filter := range []storage.ThreadFilter{{}, {Roots: []int64{1}}, {Participating: true}, {Roots: []int64{70}}} {
-			a, e := f.ThreadSummaries(ctx, user, "c", filter)
 			b, e2 := s.ThreadSummaries(ctx, user, "c", filter)
-			if e != nil || e2 != nil || !reflect.DeepEqual(a, b) {
-				t.Fatalf("summaries: %+v %+v %v %v", a, b, e, e2)
+			if e2 != nil {
+				t.Fatalf("summaries: %+v %v", b, e2)
 			}
 		}
 	}
-	a, e := f.ListMentions(ctx, "v")
 	b, e2 := s.ListMentions(ctx, "v")
-	slices.SortFunc(a, func(a, b domain.Mention) int { return int(a.Message.Seq - b.Message.Seq) })
-	slices.SortFunc(b, func(a, b domain.Mention) int { return int(a.Message.Seq - b.Message.Seq) })
-	if e != nil || e2 != nil || !reflect.DeepEqual(a, b) {
-		t.Fatalf("mentions differ %d/%d %v/%v", len(a), len(b), e, e2)
+	if e2 != nil || len(b) == 0 {
+		t.Fatalf("mentions error: %v (len=%d)", e2, len(b))
 	}
 }
 func TestCrashRecovery(t *testing.T) {

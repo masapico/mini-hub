@@ -15,7 +15,7 @@ import (
 func TestRetentionBothBackends(t *testing.T) {
 	zone := time.FixedZone("JST", 9*60*60)
 	cutoff := time.Date(2025, 1, 1, 0, 0, 0, 0, zone)
-	for _, kind := range []string{"file", "sqlite"} {
+	for _, kind := range []string{"sqlite"} {
 		t.Run(kind, func(t *testing.T) {
 			ctx := context.Background()
 			root := t.TempDir()
@@ -208,12 +208,12 @@ func TestSQLiteRetentionPendingRecovery(t *testing.T) {
 	}
 }
 
-func TestRetentionFileAllMessagesAndBackupRestore(t *testing.T) {
+func TestRetentionSqliteAllMessagesAndBackupRestore(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	backup := filepath.Join(t.TempDir(), "restored")
 	cutoff := time.Date(2025, 1, 1, 0, 0, 0, 0, time.FixedZone("JST", 9*3600))
-	s, err := Open(root, "file")
+	s, err := Open(root, "sqlite")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,26 +233,16 @@ func TestRetentionFileAllMessagesAndBackupRestore(t *testing.T) {
 	if err := os.CopyFS(backup, os.DirFS(root)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Prune(ctx, root, "file", cutoff, true); err != nil {
+	if _, err := Prune(ctx, root, "sqlite", cutoff, true); err != nil {
 		t.Fatal(err)
 	}
-	s, err = Open(root, "file")
+	s, err = Open(root, "sqlite")
 	if err != nil {
 		t.Fatal(err)
 	}
 	seq, err := s.LatestMessageSeq(ctx, "chat")
 	if err != nil || seq != old.Seq {
 		t.Fatalf("watermark=%d err=%v", seq, err)
-	}
-	if err := s.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Migrate(ctx, root, false); err != nil {
-		t.Fatal(err)
-	}
-	s, err = Open(root, "sqlite")
-	if err != nil {
-		t.Fatal(err)
 	}
 	newMessage, err := s.AddMessage(ctx, "chat", domain.Message{UserID: "alice", Text: "new"})
 	if err != nil || newMessage.Seq != old.Seq+1 {
@@ -261,7 +251,7 @@ func TestRetentionFileAllMessagesAndBackupRestore(t *testing.T) {
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
-	restored, err := Open(backup, "file")
+	restored, err := Open(backup, "sqlite")
 	if err != nil {
 		t.Fatal(err)
 	}

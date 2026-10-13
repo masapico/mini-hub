@@ -10,16 +10,14 @@ flowchart LR
     subgraph HOST["イントラネット内の稼働マシン"]
         APP["minihub 単一Goプロセス<br/>静的Web UI / HTTP API / WebSocket"]
         DIR["ローカル dataDir<br/>排他ロック・storage.json"]
-        FILE["file方式<br/>JSONメタデータ・JSONL履歴"]
         DB["SQLite方式<br/>minuhub.db / WAL"]
         APP --> DIR
-        DIR --> FILE
         DIR --> DB
     end
     U <-->|"HTTP / WebSocket"| APP
 ```
 
-`storage.type` で **file または sqlite の片方**を選びます。上図の2方式は同時に使う構成を意味しません。SQLite はローカルディスク上で使い、外部DBサーバーはありません。両方式ともデータディレクトリのプロセス排他ロックを取得し、`storage.json` と設定の方式が食い違う場合は起動を拒否します。
+永続化は組み込みSQLiteを使用します。外部DBサーバーはありません。データディレクトリのプロセス排他ロック（`.minihub.lock`）を取得し、安全に動作します。旧バージョンのfile方式データが存在する場合は、`minihub migrate -to sqlite` で移行します。
 
 ## コンポーネントと責務
 
@@ -31,8 +29,7 @@ flowchart LR
     SVC["service<br/>権限・業務ルール"]
     HUB["realtime<br/>接続・配信・在席"]
     STORE["storage.Storage<br/>永続化契約"]
-    BACK["storage/backend<br/>方式選択・排他ロック・移行"]
-    FS["filestore"]
+    BACK["storage/backend<br/>SQLiteオープン・排他ロック・移行"]
     SQL["sqlitestore"]
     MODEL["domain<br/>保存モデル"]
 
@@ -44,9 +41,7 @@ flowchart LR
     HUB -->|"閲覧・投稿権限を照会"| SVC
     SVC --> STORE
     SVC -->|"コミット後に通知"| HUB
-    BACK --> FS
     BACK --> SQL
-    FS -.->|"実装"| STORE
     SQL -.->|"実装"| STORE
     STORE --> MODEL
 ```
@@ -59,17 +54,12 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    A["Storage.AddMessage"] --> B{"選択された方式"}
-    B -->|file| F1["チャンネル単位のロック"]
-    F1 --> F2["日付別JSONLへ追記・同期"]
-    F2 --> F3["位置索引とメンション索引を更新"]
-    B -->|sqlite| S1["単一書き込み接続・短いトランザクション"]
+    A["Storage.AddMessage"] --> S1["単一書き込み接続・短いトランザクション"]
     S1 --> S2["countersの採番値とmessagesを同時コミット"]
-    F3 --> C["コミット済みメッセージを返す"]
-    S2 --> C
+    S2 --> C["コミット済みメッセージを返す"]
 ```
 
-file方式はメッセージ本文をメモリへ全件ロードせず、必要な位置索引を再構築します。JSONLの不完全な末尾行は復旧時に無視・切り詰めます。SQLite方式は永続索引を使い、採番値を `counters` に保持します。SQLite破損時にfile方式へ自動で切り替える動作はありません。
+SQLite方式は永続索引を使い、採番値を `counters` テーブルに安全に保持します。WALモードにより読み書きが分離され、高速かつ堅牢に動作します。
 
 
 ## フロントエンド依存

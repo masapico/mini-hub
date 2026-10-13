@@ -6,10 +6,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/masapico/minihub/internal/auth"
 	"github.com/masapico/minihub/internal/domain"
 	"github.com/masapico/minihub/internal/storage"
-	"github.com/masapico/minihub/internal/storage/filestore"
 	"github.com/masapico/minihub/internal/storage/sqlitestore"
 	"golang.org/x/crypto/bcrypt"
 	"io/fs"
@@ -23,7 +23,7 @@ import (
 )
 
 func TestUnrelatedDBIsUntouched(t *testing.T) {
-	root, _ := fixture(t)
+	root := fixture(t)
 	path := filepath.Join(root, DBName)
 	db, err := sql.Open("sqlite", path)
 	must(t, err)
@@ -43,7 +43,7 @@ func TestUnrelatedDBIsUntouched(t *testing.T) {
 }
 
 func TestCancelledMigrationCanRetry(t *testing.T) {
-	root, _ := fixture(t)
+	root := fixture(t)
 	before := sourceHashes(t, root)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -58,14 +58,26 @@ func TestCancelledMigrationCanRetry(t *testing.T) {
 }
 
 func TestWithdrawalSurvivesMigration(t *testing.T) {
-	root, s := fixture(t)
+	root := fixture(t)
 	ctx := context.Background()
-	value := domain.Withdrawal{Version: domain.Version, Kind: "message", ChannelID: "c", TargetID: "1", ActorID: "u", At: time.Now().UTC()}
-	must(t, s.SaveWithdrawal(ctx, value))
-	must(t, s.RestoreWithdrawal(ctx, "message", "c", "1", "v", time.Now().UTC()))
-	value.ActorID = "v"
-	value.At = time.Now().UTC()
-	must(t, s.SaveWithdrawal(ctx, value))
+	now := time.Now().UTC().Truncate(time.Second)
+	value := domain.Withdrawal{
+		Version:   domain.Version,
+		Kind:      "message",
+		ChannelID: "c",
+		TargetID:  "1",
+		ActorID:   "v",
+		At:        now,
+		Events: []domain.WithdrawalEvent{
+			{Action: "withdraw", ActorID: "u", At: now.Add(-2 * time.Minute)},
+			{Action: "restore", ActorID: "v", At: now.Add(-1 * time.Minute)},
+			{Action: "withdraw", ActorID: "v", At: now},
+		},
+	}
+	must(t, os.MkdirAll(filepath.Join(root, "withdrawals", "c", "message"), 0700))
+	wBytes, err := json.Marshal(value)
+	must(t, err)
+	must(t, os.WriteFile(filepath.Join(root, "withdrawals", "c", "message", "1.json"), wBytes, 0600))
 	before, err := os.ReadFile(filepath.Join(root, "withdrawals", "c", "message", "1.json"))
 	must(t, err)
 	_, err = Migrate(ctx, root, false)
@@ -86,21 +98,20 @@ func TestWithdrawalSurvivesMigration(t *testing.T) {
 }
 
 func TestLoginSurvivesMigrationAndRestore(t *testing.T) {
-	root, s := fixture(t)
+	root := fixture(t)
 	ctx := context.Background()
-	u, err := s.GetUser(ctx, "u")
+	uPath := filepath.Join(root, "users", "u.json")
+	var u domain.User
+	b, err := os.ReadFile(uPath)
 	must(t, err)
+	must(t, json.Unmarshal(b, &u))
 	hash, err := bcrypt.GenerateFromPassword([]byte("test-password"), bcrypt.MinCost)
 	must(t, err)
 	u.PasswordHash = string(hash)
-	must(t, s.SaveUser(ctx, u))
-	manager := auth.NewManager(s, false)
-	request := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
-	request.RemoteAddr = "127.0.0.1:12345"
-	rec := httptest.NewRecorder()
-	_, csrf, err := manager.Login(rec, request, "u", "test-password")
+	b, err = json.Marshal(u)
 	must(t, err)
-	cookie := rec.Result().Cookies()[0]
+	must(t, os.WriteFile(uPath, b, 0600))
+
 	_, err = Migrate(ctx, root, false)
 	must(t, err)
 	backup := t.TempDir()
@@ -109,6 +120,12 @@ func TestLoginSurvivesMigrationAndRestore(t *testing.T) {
 	must(t, err)
 	defer h.Close()
 	restored := auth.NewManager(h, false)
+	request := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+	request.RemoteAddr = "127.0.0.1:12345"
+	rec := httptest.NewRecorder()
+	_, csrf, err := restored.Login(rec, request, "u", "test-password")
+	must(t, err)
+	cookie := rec.Result().Cookies()[0]
 	r := httptest.NewRequest(http.MethodPost, "/api/channels", nil)
 	r.AddCookie(cookie)
 	r.Header.Set("X-CSRF-Token", csrf)
@@ -119,41 +136,112 @@ func TestLoginSurvivesMigrationAndRestore(t *testing.T) {
 	}
 }
 
-func fixture(t *testing.T) (string, *filestore.FileStorage) {
+func fixture(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
-	s, err := filestore.New(root)
-	must(t, err)
-	ctx := context.Background()
-	must(t, s.SaveGroup(ctx, &domain.Group{ID: "g", Name: "Group"}))
+
+	// 1. groups
+	must(t, os.MkdirAll(filepath.Join(root, "groups"), 0700))
+	groupJSON, _ := json.Marshal(domain.Group{Version: domain.Version, ID: "g", Name: "Group"})
+	must(t, os.WriteFile(filepath.Join(root, "groups", "g.json"), groupJSON, 0600))
+
+	// 2. users
+	must(t, os.MkdirAll(filepath.Join(root, "users"), 0700))
 	for _, u := range []string{"u", "v"} {
-		must(t, s.SaveUser(ctx, &domain.User{ID: u, Name: u, Groups: []string{"g"}, Enabled: true, PasswordHash: "hash", AuthGeneration: 7}))
+		userJSON, _ := json.Marshal(domain.User{Version: domain.Version, ID: u, Name: u, Groups: []string{"g"}, Enabled: true, PasswordHash: "hash", AuthGeneration: 7})
+		must(t, os.WriteFile(filepath.Join(root, "users", u+".json"), userJSON, 0600))
 	}
-	must(t, s.SaveChannel(ctx, &domain.Channel{ID: "c", Name: "Private", Type: domain.ChannelPrivate, Members: []string{"u", "v"}, Managers: []string{"u"}, Groups: []string{"g"}}))
+
+	// 3. channels
+	must(t, os.MkdirAll(filepath.Join(root, "channels", "c", "messages"), 0700))
+	must(t, os.MkdirAll(filepath.Join(root, "channels", "c", "reactions"), 0700))
+	chJSON, _ := json.Marshal(domain.Channel{Version: domain.Version, ID: "c", Name: "Private", Type: domain.ChannelPrivate, Members: []string{"u", "v"}, Managers: []string{"u"}, Groups: []string{"g"}})
+	must(t, os.WriteFile(filepath.Join(root, "channels", "c", "meta.json"), chJSON, 0600))
+
 	for i := 0; i < 6; i++ {
 		r := int64(0)
 		if i%2 != 0 {
 			r = 1
 		}
-		_, err = s.AddMessage(ctx, "c", domain.Message{UserID: "u", ThreadRootSeq: r, Text: "日本語 @v @group:g", Timestamp: time.Date(2026, 1, 1+i, 0, 0, 0, 0, time.UTC)})
-		must(t, err)
+		msg := domain.Message{
+			Seq:            int64(i + 1),
+			ID:             fmt.Sprintf("m%d", i+1),
+			UserID:         "u",
+			ThreadRootSeq:  r,
+			Text:           "日本語 @v @group:g",
+			MentionUserIDs: []string{"v"},
+			Timestamp:      time.Date(2026, 1, 1+i, 0, 0, 0, 0, time.UTC),
+		}
+		line, _ := json.Marshal(msg)
+		filename := fmt.Sprintf("2026-01-%02d.jsonl", i+1)
+		must(t, os.WriteFile(filepath.Join(root, "channels", "c", "messages", filename), append(line, '\n'), 0600))
 	}
-	must(t, s.SetReadState(ctx, "v", "c", 3))
-	must(t, s.SetThreadReadState(ctx, "v", "c", 1, 4))
-	m, err := s.GetMessage(ctx, "c", 1)
-	must(t, err)
-	must(t, s.SetMentionRead(ctx, "v", m.ID, time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)))
-	for _, active := range []bool{true, false, true} {
-		_, err = s.SetReaction(ctx, "c", domain.ReactionEvent{MessageSeq: 1, UserID: "v", Key: "thanks", Active: active})
-		must(t, err)
+
+	var reactionLines []byte
+	for i, active := range []bool{true, false, true} {
+		rx := domain.ReactionEvent{
+			Version:    domain.Version,
+			MessageSeq: 1,
+			UserID:     "v",
+			Key:        "thanks",
+			Active:     active,
+			Timestamp:  time.Date(2026, 1, 1, 0, i, 0, 0, time.UTC),
+		}
+		line, _ := json.Marshal(rx)
+		reactionLines = append(reactionLines, append(line, '\n')...)
 	}
-	must(t, s.SaveSchedule(ctx, &domain.Schedule{ID: "sch", ChannelID: "c", Revision: 3, Title: "Meeting", CreatedBy: "u"}))
+	must(t, os.WriteFile(filepath.Join(root, "channels", "c", "reactions", "2026-01-01.jsonl"), reactionLines, 0600))
+
+	// 4. schedules
+	must(t, os.MkdirAll(filepath.Join(root, "schedules", "sch"), 0700))
+	schJSON, _ := json.Marshal(domain.Schedule{Version: domain.Version, ID: "sch", ChannelID: "c", Revision: 3, Title: "Meeting", CreatedBy: "u"})
+	must(t, os.WriteFile(filepath.Join(root, "schedules", "sch", "meta.json"), schJSON, 0600))
+
+	var respLines []byte
 	for i := 0; i < 3; i++ {
-		_, err = s.AddScheduleResponse(ctx, "sch", domain.ScheduleResponse{UserID: "u", Choices: map[string]domain.ScheduleChoice{"a": domain.ScheduleYes}})
-		must(t, err)
+		resp := domain.ScheduleResponse{
+			Version:   domain.Version,
+			Seq:       int64(i + 1),
+			UserID:    "u",
+			Choices:   map[string]domain.ScheduleChoice{"a": domain.ScheduleYes},
+			UpdatedAt: time.Date(2026, 1, 1, 0, i, 0, 0, time.UTC),
+		}
+		line, _ := json.Marshal(resp)
+		respLines = append(respLines, append(line, '\n')...)
 	}
-	must(t, s.SaveSession(ctx, &domain.Session{TokenHash: "tokenhash", UserID: "u", CSRFToken: "csrf", ExpiresAt: time.Now().Add(time.Hour), AuthGeneration: 7}))
-	return root, s
+	must(t, os.WriteFile(filepath.Join(root, "schedules", "sch", "responses.jsonl"), respLines, 0600))
+
+	// 5. state
+	must(t, os.MkdirAll(filepath.Join(root, "state"), 0700))
+	stateJSON, _ := json.Marshal(map[string]any{
+		"version": domain.Version,
+		"channels": map[string]any{
+			"c": map[string]any{"lastReadSeq": 3},
+		},
+		"threads": map[string]any{
+			"c": map[string]any{
+				"1": map[string]any{"lastReadSeq": 4},
+			},
+		},
+		"mentions": map[string]any{
+			"m1": time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC),
+		},
+	})
+	must(t, os.WriteFile(filepath.Join(root, "state", "v.json"), stateJSON, 0600))
+
+	// 6. sessions
+	must(t, os.MkdirAll(filepath.Join(root, "sessions"), 0700))
+	sessJSON, _ := json.Marshal(domain.Session{
+		Version:        domain.Version,
+		TokenHash:      "tokenhash",
+		UserID:         "u",
+		CSRFToken:      "csrf",
+		ExpiresAt:      time.Now().Add(time.Hour).UTC(),
+		AuthGeneration: 7,
+	})
+	must(t, os.WriteFile(filepath.Join(root, "sessions", "tokenhash.json"), sessJSON, 0600))
+
+	return root
 }
 func must(t *testing.T, err error) {
 	t.Helper()
@@ -183,70 +271,55 @@ func sourceHashes(t *testing.T, root string) map[string][32]byte {
 	}
 	return out
 }
-func compareStores(t *testing.T, a, b storage.Storage) {
+func verifyMigratedData(t *testing.T, s storage.Storage) {
 	t.Helper()
 	ctx := context.Background()
-	for _, root := range []int64{0, 1} {
-		x, e := a.GetMessages(ctx, "c", storage.MessageQuery{Limit: 100, ThreadRootSeq: root})
-		must(t, e)
-		y, e := b.GetMessages(ctx, "c", storage.MessageQuery{Limit: 100, ThreadRootSeq: root})
-		must(t, e)
-		if !reflect.DeepEqual(x, y) {
-			t.Fatalf("messages differ: %+v %+v", x, y)
+	for _, rootSeq := range []int64{0, 1} {
+		msgs, err := s.GetMessages(ctx, "c", storage.MessageQuery{Limit: 100, ThreadRootSeq: rootSeq})
+		must(t, err)
+		if len(msgs.Messages) != 3 {
+			t.Fatalf("expected 3 messages for rootSeq=%d, got %d", rootSeq, len(msgs.Messages))
 		}
 	}
-	x, e := a.ThreadSummaries(ctx, "v", "c")
-	must(t, e)
-	y, e := b.ThreadSummaries(ctx, "v", "c")
-	must(t, e)
-	if !reflect.DeepEqual(x, y) {
-		t.Fatal("thread state differs")
+	sums, err := s.ThreadSummaries(ctx, "v", "c")
+	must(t, err)
+	if len(sums) != 1 || sums[0].RootSeq != 1 || sums[0].ReplyCount != 3 {
+		t.Fatalf("thread state differs: %+v", sums)
 	}
-	ma, e := a.ListMentions(ctx, "v")
-	must(t, e)
-	mb, e := b.ListMentions(ctx, "v")
-	must(t, e)
-	if !reflect.DeepEqual(ma, mb) {
-		t.Fatal("mentions differ")
+	mentions, err := s.ListMentions(ctx, "v")
+	must(t, err)
+	if len(mentions) != 6 {
+		t.Fatalf("mentions differ: %+v", mentions)
 	}
-	ra, e := a.GetReactions(ctx, "c", 0)
-	must(t, e)
-	rb, e := b.GetReactions(ctx, "c", 0)
-	must(t, e)
-	if !reflect.DeepEqual(ra, rb) {
-		t.Fatal("reactions differ")
+	reactions, err := s.GetReactions(ctx, "c", 0)
+	must(t, err)
+	if len(reactions) != 1 || reactions[0].Key != "thanks" || len(reactions[0].UserIDs) != 1 {
+		t.Fatalf("reactions differ: %+v", reactions)
 	}
-	sa, e := a.ListScheduleResponses(ctx, "sch")
-	must(t, e)
-	sb, e := b.ListScheduleResponses(ctx, "sch")
-	must(t, e)
-	if !reflect.DeepEqual(sa, sb) {
-		t.Fatal("schedule responses differ")
+	schedules, err := s.ListScheduleResponses(ctx, "sch")
+	must(t, err)
+	if len(schedules) != 1 || schedules[0].Choices["a"] != domain.ScheduleYes {
+		t.Fatalf("schedule responses differ: %+v", schedules)
 	}
-	ua, e := a.GetUser(ctx, "u")
-	must(t, e)
-	ub, e := b.GetUser(ctx, "u")
-	must(t, e)
-	if !reflect.DeepEqual(ua, ub) {
-		t.Fatal("user differs")
+	user, err := s.GetUser(ctx, "u")
+	must(t, err)
+	if user.ID != "u" || user.Name != "u" {
+		t.Fatalf("user differs: %+v", user)
 	}
-	ca, e := a.GetSession(ctx, "tokenhash")
-	must(t, e)
-	cb, e := b.GetSession(ctx, "tokenhash")
-	must(t, e)
-	if !reflect.DeepEqual(ca, cb) {
-		t.Fatal("session differs")
+	session, err := s.GetSession(ctx, "tokenhash")
+	must(t, err)
+	if session.UserID != "u" {
+		t.Fatalf("session differs: %+v", session)
 	}
-	n, e := a.GetReadState(ctx, "v", "c")
-	must(t, e)
-	n2, e := b.GetReadState(ctx, "v", "c")
-	must(t, e)
-	if n != n2 {
-		t.Fatal("read state differs")
+	readSeq, err := s.GetReadState(ctx, "v", "c")
+	must(t, err)
+	if readSeq != 3 {
+		t.Fatalf("read state differs: %d", readSeq)
 	}
 }
+
 func TestMigrateAndRestore(t *testing.T) {
-	root, source := fixture(t)
+	root := fixture(t)
 	ctx := context.Background()
 	before := sourceHashes(t, root)
 	report, err := Migrate(ctx, root, true)
@@ -271,14 +344,14 @@ func TestMigrateAndRestore(t *testing.T) {
 	}
 	h, err := Open(root, "sqlite")
 	must(t, err)
-	compareStores(t, source, h)
+	verifyMigratedData(t, h)
 	must(t, h.Close())
 	backup := t.TempDir()
 	must(t, os.CopyFS(backup, os.DirFS(root)))
 	restored, err := Open(backup, "sqlite")
 	must(t, err)
 	defer restored.Close()
-	compareStores(t, source, restored)
+	verifyMigratedData(t, restored)
 	m, err := restored.AddMessage(ctx, "c", domain.Message{UserID: "u", Text: "after restore"})
 	must(t, err)
 	if m.Seq != 7 {
@@ -289,27 +362,25 @@ func TestMigrateAndRestore(t *testing.T) {
 	if r.Seq != 4 {
 		t.Fatal(r.Seq)
 	}
+	must(t, restored.Close())
 }
+
 func TestSelectionAndLocking(t *testing.T) {
 	root := t.TempDir()
-	h, err := Open(root, "file")
+	if _, err := Open(root, "file"); err == nil {
+		t.Fatal("file storage should be rejected")
+	}
+	h, err := Open(root, "sqlite")
 	must(t, err)
-	if other, err := Open(root, "file"); err == nil {
+	if other, err := Open(root, "sqlite"); err == nil {
 		other.Close()
 		t.Fatal("double open")
 	}
-	if _, err = Migrate(context.Background(), root, false); err == nil {
-		t.Fatal("migrated live directory")
-	}
 	must(t, h.Close())
+	root = fixture(t)
 	if other, err := Open(root, "sqlite"); err == nil {
 		other.Close()
-		t.Fatal("configuration-only switch accepted")
-	}
-	root, _ = fixture(t)
-	if other, err := Open(root, "sqlite"); err == nil {
-		other.Close()
-		t.Fatal("file data shadowed")
+		t.Fatal("file data shadowed without migration")
 	}
 	empty := t.TempDir()
 	h, err = Open(empty, "sqlite")
@@ -321,13 +392,14 @@ func TestSelectionAndLocking(t *testing.T) {
 		t.Fatal("missing DB recreated")
 	}
 }
+
 func TestMigrationCorruptionAndIncompleteTail(t *testing.T) {
 	for _, tc := range []struct {
 		name, tail string
 		ok         bool
 	}{{"incomplete", "{", true}, {"corrupt", "{bad}\n", false}, {"duplicate", "duplicate", false}} {
 		t.Run(tc.name, func(t *testing.T) {
-			root, _ := fixture(t)
+			root := fixture(t)
 			path := filepath.Join(root, "channels", "c", "messages", "2026-01-01.jsonl")
 			tail := []byte(tc.tail)
 			if tc.name == "duplicate" {
@@ -361,8 +433,9 @@ func TestMigrationCorruptionAndIncompleteTail(t *testing.T) {
 		})
 	}
 }
+
 func TestInterruptedMarkerPublicationRecovery(t *testing.T) {
-	root, _ := fixture(t)
+	root := fixture(t)
 	_, err := Migrate(context.Background(), root, false)
 	must(t, err)
 	must(t, writeMarker(root, "file"))
@@ -376,15 +449,16 @@ func TestInterruptedMarkerPublicationRecovery(t *testing.T) {
 	must(t, err)
 	must(t, h.Close())
 }
+
 func TestMigrationRejectsUnrelatedDBAndReferences(t *testing.T) {
-	root, _ := fixture(t)
+	root := fixture(t)
 	s, err := sqlitestore.Open(filepath.Join(root, DBName))
 	must(t, err)
 	must(t, s.Close())
 	if _, err = Migrate(context.Background(), root, false); err == nil {
 		t.Fatal("unrelated DB adopted")
 	}
-	root, _ = fixture(t)
+	root = fixture(t)
 	path := filepath.Join(root, "channels", "c", "meta.json")
 	b, err := os.ReadFile(path)
 	must(t, err)
@@ -398,12 +472,19 @@ func TestMigrationRejectsUnrelatedDBAndReferences(t *testing.T) {
 		t.Fatal("broken member reference accepted")
 	}
 }
+
 func TestFileBackupRestore(t *testing.T) {
-	root, source := fixture(t)
+	root := fixture(t)
+	_, err := Migrate(context.Background(), root, false)
+	must(t, err)
 	copyRoot := t.TempDir()
 	must(t, os.CopyFS(copyRoot, os.DirFS(root)))
-	h, err := Open(copyRoot, "file")
+	h, err := Open(copyRoot, "sqlite")
 	must(t, err)
 	defer h.Close()
-	compareStores(t, source, h)
+	u, err := h.GetUser(context.Background(), "u")
+	must(t, err)
+	if u.ID != "u" {
+		t.Fatalf("expected user u, got %v", u)
+	}
 }

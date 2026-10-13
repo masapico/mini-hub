@@ -10,7 +10,6 @@ import (
 
 	"github.com/gofrs/flock"
 	"github.com/masapico/minihub/internal/storage"
-	"github.com/masapico/minihub/internal/storage/filestore"
 	"github.com/masapico/minihub/internal/storage/sqlitestore"
 )
 
@@ -106,8 +105,8 @@ func fileData(root string) (bool, error) {
 	return false, nil
 }
 func Open(root, kind string) (_ *Handle, err error) {
-	if kind != "file" && kind != "sqlite" {
-		return nil, errors.New("invalid storage type")
+	if kind != "sqlite" {
+		return nil, errors.New("storage.type must be sqlite; file storage has been discontinued (run minihub migrate -to sqlite)")
 	}
 	l, err := Lock(root)
 	if err != nil {
@@ -119,11 +118,6 @@ func Open(root, kind string) (_ *Handle, err error) {
 			h.Close()
 		}
 	}()
-	if _, e := os.Stat(filepath.Join(root, filestore.RetentionJournal)); e == nil {
-		return nil, errors.New("retention deletion is incomplete; rerun the retention command before starting")
-	} else if !errors.Is(e, os.ErrNotExist) {
-		return nil, e
-	}
 	if _, e := os.Stat(filepath.Join(root, ".retention-sqlite-pending.json")); e == nil {
 		return nil, errors.New("SQLite retention cleanup is incomplete; rerun the retention command before starting")
 	} else if !errors.Is(e, os.ErrNotExist) {
@@ -138,46 +132,40 @@ func Open(root, kind string) (_ *Handle, err error) {
 	if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
 		return nil, statErr
 	}
-	if mark != "" && mark != kind {
-		return nil, fmt.Errorf("storage.type=%s does not match data directory (%s); use the migration procedure", kind, mark)
+	if mark == "file" {
+		return nil, errors.New("storage.json indicates file storage; run minihub migrate -to sqlite")
 	}
-	if kind == "file" {
-		if dbExists {
-			return nil, errors.New("SQLite database exists; refusing to open retained file data")
+	if mark != "" && mark != "sqlite" {
+		return nil, fmt.Errorf("storage.type=%s does not match data directory (%s)", kind, mark)
+	}
+	if mark == "sqlite" && !dbExists {
+		return nil, errors.New("SQLite database is missing; refusing to initialize an empty replacement")
+	}
+	if mark == "" {
+		has, e := fileData(root)
+		if e != nil {
+			return nil, e
 		}
-		h.Storage, err = filestore.New(root)
+		if has {
+			return nil, errors.New("file data exists; run migrate -to sqlite before changing storage.type")
+		}
+		if dbExists {
+			return nil, errors.New("unmarked SQLite database; restore its storage.json or complete migration")
+		}
+	}
+	var s *sqlitestore.Store
+	if dbExists {
+		s, err = sqlitestore.OpenExisting(filepath.Join(root, DBName))
 	} else {
-		if mark == "sqlite" && !dbExists {
-			return nil, errors.New("SQLite database is missing; refusing to initialize an empty replacement")
-		}
-		if mark == "" {
-			has, e := fileData(root)
-			if e != nil {
-				return nil, e
-			}
-			if has {
-				return nil, errors.New("file data exists; run migrate -to sqlite before changing storage.type")
-			}
-			if dbExists {
-				return nil, errors.New("unmarked SQLite database; restore its storage.json or complete migration")
-			}
-		}
-		var s *sqlitestore.Store
-		if dbExists {
-			s, err = sqlitestore.OpenExisting(filepath.Join(root, DBName))
-		} else {
-			s, err = sqlitestore.Open(filepath.Join(root, DBName))
-		}
-		if err == nil {
-			h.Storage = s
-			h.close = s.Close
-		}
+		s, err = sqlitestore.Open(filepath.Join(root, DBName))
 	}
 	if err != nil {
 		return nil, err
 	}
+	h.Storage = s
+	h.close = s.Close
 	if mark == "" {
-		if err = writeMarker(root, kind); err != nil {
+		if err = writeMarker(root, "sqlite"); err != nil {
 			return nil, err
 		}
 	}

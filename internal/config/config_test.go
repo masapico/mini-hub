@@ -9,14 +9,14 @@ import (
 )
 
 func TestStorageSelection(t *testing.T) {
-	for _, kind := range []string{"file", "sqlite", "", "mysql"} {
+	for _, kind := range []string{"sqlite", "file", "", "mysql"} {
 		t.Run(fmt.Sprintf("type_%s", kind), func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.json")
 			if err := os.WriteFile(path, []byte(fmt.Sprintf(`{"version":1,"storage":{"type":%q}}`, kind)), 0600); err != nil {
 				t.Fatal(err)
 			}
 			cfg, _, err := Load(path, true)
-			if kind == "file" || kind == "sqlite" {
+			if kind == "sqlite" {
 				if err != nil || cfg.Storage.Type != kind {
 					t.Fatal(cfg, err)
 				}
@@ -25,8 +25,8 @@ func TestStorageSelection(t *testing.T) {
 			}
 		})
 	}
-	if Defaults().Storage.Type != "file" {
-		t.Fatal("legacy default changed")
+	if Defaults().Storage.Type != "sqlite" {
+		t.Fatal("default storage type must be sqlite")
 	}
 }
 

@@ -244,9 +244,9 @@ type Storage interface {
 }
 ```
 
-file方式は `internal/storage/filestore`、SQLite方式は `internal/storage/sqlitestore` が実装します。設定の `storage.type` で選び、停止中のfile→SQLite移行を提供します。どちらも同じStorage契約とサービス層の認可を使います。
+永続化は `internal/storage/sqlitestore` の組み込みSQLiteが実装します。旧file方式（JSON/JSONL）からの停止中移行コマンド（`minihub migrate -to sqlite`）を提供します。Storage契約とサービス層の認可を通じてアクセスします。
 
-`MessageQuery` は過去方向の `BeforeSeq`、前方向の `AfterSeq`、指定位置周辺の `AroundSeq` のいずれかと取得上限を持ち、カーソルは同時に指定しません。file方式はチャンネルごとにseqとファイル・バイト位置・行長をメモリ索引化し、選択した行だけを読みます。通常投稿とスレッド返信のseq列は分離します。索引は最初の参照時にチャンネルライターのロック内で再構築し、投稿コミット後に更新します。
+`MessageQuery` は過去方向の `BeforeSeq`、前方向の `AfterSeq`、指定位置周辺の `AroundSeq` のいずれかと取得上限を持ち、カーソルは同時に指定しません。通常投稿とスレッド返信のseq列は分離し、永続的なSQLiteインデックスを使用して高速に検索します。
 
 ## 7. 書き込みの並行制御
 
@@ -434,10 +434,9 @@ internal/
 ├── realtime/
 ├── shutdown/
 ├── storage/
-│   ├── backend/     # 方式選択、排他ロック、移行、物理削除
-│   ├── filestore/   # JSON／JSONL
-│   ├── sqlitestore/ # SQLite
-│   └── storetest/   # 両方式の共通契約試験
+│   ├── backend/     # SQLiteオープン、排他ロック、旧データ移行、物理削除
+│   ├── sqlitestore/ # SQLite実装
+│   └── storetest/   # ストレージ契約テスト
 └── service/
 web/                 # 埋め込みWeb UIと同梱アセット
 tests/               # ブラウザ・負荷検証の手順とスクリプト

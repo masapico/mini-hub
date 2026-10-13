@@ -51,12 +51,13 @@ func (s *Service) threadRoot(ctx context.Context, userID, channelID string, root
 }
 func (s *Service) PostThreadMessage(ctx context.Context, userID, channelID string, root int64, text string, attachmentIDs ...string) (domain.Message, error) {
 	var committed domain.Message
+	var attachmentPayloads []AIAttachmentPayload
 	lock := s.channelLock("withdraw:message:" + channelID + ":" + strconv.FormatInt(root, 10))
 	lock.Lock()
 	defer func() {
 		lock.Unlock()
 		if committed.ID != "" {
-			s.enqueueAI(userID, channelID, committed)
+			s.enqueueAI(userID, channelID, committed, attachmentPayloads...)
 		}
 	}()
 	if err := s.canPost(ctx, userID, channelID); err != nil {
@@ -78,7 +79,7 @@ func (s *Service) PostThreadMessage(ctx context.Context, userID, channelID strin
 			return domain.Message{}, fmt.Errorf("%w: ファイル添付はAIへのメンション（@ai:...）時のみ利用できます", ErrInvalid)
 		}
 		var err error
-		attachments, err = s.consumeStagedAttachments(userID, channelID, attachmentIDs)
+		attachments, attachmentPayloads, err = s.consumeStagedAttachments(userID, channelID, attachmentIDs)
 		if err != nil {
 			return domain.Message{}, err
 		}

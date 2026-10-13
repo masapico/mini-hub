@@ -9,7 +9,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"testing"
 
 	"github.com/masapico/minihub/internal/domain"
@@ -33,7 +32,6 @@ func TestAttachmentUploadAndMessagePostHTTP(t *testing.T) {
 		}
 	}
 	svc := service.New(store)
-	svc.SetAttachmentsDir(filepath.Join(t.TempDir(), "attachments"))
 	if _, err := svc.CreateChannel(ctx, "admin", domain.Channel{
 		ID:      "general",
 		Name:    "General",

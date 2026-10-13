@@ -96,7 +96,7 @@ func writeTransportConfig(t *testing.T, dir string, cfg config.Config) string {
 }
 
 func TestHTTPAndHTTPSStartup(t *testing.T) {
-	for _, storage := range []string{"file", "sqlite"} {
+	for _, storage := range []string{"sqlite"} {
 		for _, secure := range []bool{false, true} {
 			scheme := "http"
 			if secure {

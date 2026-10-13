@@ -86,7 +86,7 @@ node tests/threads-browser.mjs /private/tmp/minihub-threads
 負荷検証は通常のテストから分離し、次の環境変数で有効にします。データはテスト用一時ディレクトリに生成されます。
 
 ```bash
-THREAD_BENCH_MESSAGES=1000000 go test ./internal/storage/filestore -run TestThreadIndexLoadProfile -count=1 -v
+THREAD_BENCH_MESSAGES=1000000 go test ./internal/storage/sqlitestore -run TestThreadIndexLoadProfile -count=1 -v
 THREAD_CONNECTION_PROFILE=1 go test ./internal/realtime -run TestThreadConnectionProfile -count=1 -v
 ```
 
@@ -99,15 +99,13 @@ THREAD_CONNECTION_PROFILE=1 go test ./internal/realtime -run TestThreadConnectio
 
 現在のリアクションボタンは「了解」「完了」「確認中」「感謝」の4種類です。API／保存データのキーは順に `ack`、`done`、`eyes`、`thanks` です。`eyes` は互換性のためのキー名で、画面には「確認中」の砂時計アイコンを表示します。返信ブラウザテストは `ack` の追加後、リアクション数と返信ボタンの配置を確認します。
 
-## SQLite共通試験と移行試験
+## SQLite試験と移行試験
 
-通常の`go test ./...`はfile版のサービス試験に加え、SQLite固有の比較・採番・クラッシュ復旧試験、移行・バックアップ復元試験を実行します。サービス／HTTP／初期管理者／WebSocketの共通試験をSQLiteで実行する場合は次のようにします。
+通常の`go test ./...`はSQLite単一構成で、採番・クラッシュ復旧試験、旧file形式からの移行・バックアップ復元試験を実行します。
 
 ```powershell
-$env:MINIHUB_TEST_STORAGE = 'sqlite'
 go test ./...
 go test -race ./...
-Remove-Item Env:MINIHUB_TEST_STORAGE
 ```
 
 `-race`にはCGOとCコンパイラーが必要です。Windowsでは対応するMinGW-w64系コンパイラーを`CC`へ指定し、`CGO_ENABLED=1`で実行します。通常配布用ビルドにはCGOは不要です。
@@ -115,14 +113,12 @@ Remove-Item Env:MINIHUB_TEST_STORAGE
 ```powershell
 $env:THREAD_BENCH_MESSAGES = '3650000' # または1000000
 go test ./internal/storage/sqlitestore -run '^TestHistoryProfile$' -count=1 -v -timeout=20m
-go test ./internal/storage/filestore -run '^TestThreadIndexLoadProfile$' -count=1 -v -timeout=10m
 Remove-Item Env:THREAD_BENCH_MESSAGES
 
 $env:THREAD_CONNECTION_PROFILE = '1'
 $env:THREAD_MIXED_PROFILE = '1'
-$env:MINIHUB_TEST_STORAGE = 'sqlite' # fileの場合はこの変数を設定しない
 go test ./internal/realtime -run '^TestThreadConnectionProfile$' -count=1 -v -timeout=5m
-Remove-Item Env:THREAD_CONNECTION_PROFILE,Env:THREAD_MIXED_PROFILE,Env:MINIHUB_TEST_STORAGE
+Remove-Item Env:THREAD_CONNECTION_PROFILE,Env:THREAD_MIXED_PROFILE
 ```
 
 大量履歴は従来と同じ分布（20投稿者、30%返信、10件ごとの元発言へ3返信）です。SQLiteは生成後に接続を閉じて開き直し、永続索引による初回ページ取得を測ります。fileはJSONLから初回メモリ索引を構築します。両者ともOSキャッシュが暖まった開発環境での測定です。SQLiteのGoヒープ差分はDBのページキャッシュやプロセスRSS全体の測定ではありません。

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "storage": { "type": "file" },
+  "storage": { "type": "sqlite" },
   "server": {
     "listenAddress": "127.0.0.1:8080",
     "basePath": "",
@@ -18,16 +18,23 @@
     "loginMessage": "ユーザーIDとパスワードを入力してください。"
   },
   "features": {
-    "selfPasswordChange": true,
+    "selfPasswordChange": false,
     "networkPathMode": "copy"
   },
-  "notifications": { "mentionRetentionDays": 365, "osNotificationsEnabled": true },
-  "retention": { "days": 0 },
-  "logging": { "level": "info" },
+  "notifications": {
+    "mentionRetentionDays": 365,
+    "osNotificationsEnabled": true
+  },
+  "retention": {
+    "days": 0
+  },
+  "logging": {
+    "level": "info"
+  },
   "aiAccounts": [],
   "initialAdmin": {
     "id": "admin",
     "name": "管理者",
-    "password": "CHANGE-ME"
+    "password": "Password1234"
   }
 }

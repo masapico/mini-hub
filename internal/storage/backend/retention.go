@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/masapico/minihub/internal/storage"
-	"github.com/masapico/minihub/internal/storage/filestore"
 	"github.com/masapico/minihub/internal/storage/sqlitestore"
 )
 
@@ -27,33 +26,8 @@ func Prune(ctx context.Context, root, kind string, cutoff time.Time, apply bool)
 	if err != nil {
 		return report, err
 	}
-	if kind != "file" && kind != "sqlite" || marked != "" && marked != kind {
-		return report, errors.New("storage type does not match data directory")
-	}
-	if kind == "file" {
-		if marked == "" {
-			has, e := fileData(root)
-			if e != nil {
-				return report, e
-			}
-			if !has {
-				return report, errors.New("no file data to prune")
-			}
-		}
-		if _, e := os.Stat(filepath.Join(root, DBName)); e == nil {
-			return report, errors.New("SQLite database exists in file-mode directory")
-		} else if !errors.Is(e, os.ErrNotExist) {
-			return report, e
-		}
-		s, e := filestore.New(root)
-		if e != nil {
-			return report, e
-		}
-		report, err = s.PruneRetention(ctx, cutoff, apply)
-		if err == nil && apply && report.Messages > 0 {
-			err = recordRetention(root, kind, report)
-		}
-		return report, err
+	if kind != "sqlite" || (marked != "" && marked != "sqlite") {
+		return report, errors.New("retention is only supported for sqlite storage")
 	}
 	if marked != "sqlite" {
 		return report, errors.New("SQLite storage marker is required")

@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -82,8 +81,29 @@ func TestAIPayloadRolesAndSystemPrompt(t *testing.T) {
 			if strings.TrimSpace(prompt) != "" {
 				want = append([]aiContextMessage{{Role: "system", Content: prompt}}, want...)
 			}
-			if got.Model != "local-model" || got.Stream || !reflect.DeepEqual(got.Messages, want) {
-				t.Fatalf("payload: %s", b)
+			if got.Model != "local-model" || got.Stream {
+				t.Fatalf("unexpected model or stream: %s", b)
+			}
+			if len(got.Messages) != len(want) {
+				t.Fatalf("expected %d messages, got %d: %s", len(want), len(got.Messages), b)
+			}
+			for i, w := range want {
+				if got.Messages[i].Role != w.Role {
+					t.Fatalf("message %d role mismatch: got %s, want %s", i, got.Messages[i].Role, w.Role)
+				}
+				contentStr, ok := got.Messages[i].Content.(string)
+				if !ok {
+					t.Fatalf("message %d content not string: %+v", i, got.Messages[i].Content)
+				}
+				if i == len(want)-1 {
+					if !strings.Contains(contentStr, "[現在日時:") || !strings.HasSuffix(contentStr, w.Content.(string)) {
+						t.Fatalf("message %d trigger content mismatch: %s", i, contentStr)
+					}
+				} else {
+					if contentStr != w.Content.(string) {
+						t.Fatalf("message %d content mismatch: got %q, want %q", i, contentStr, w.Content)
+					}
+				}
 			}
 		})
 	}

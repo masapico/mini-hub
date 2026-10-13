@@ -3,11 +3,10 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -43,7 +42,7 @@ type StagedAttachment struct {
 	UserID    string
 	Filename  string
 	Size      int64
-	Path      string
+	Data      []byte
 	CreatedAt time.Time
 }
 
@@ -53,32 +52,20 @@ type AttachmentSummary struct {
 	Size     int64  `json:"size"`
 }
 
+type AIAttachmentPayload struct {
+	Name   string `json:"name"`
+	Base64 string `json:"data"`
+}
+
 type AttachmentManager struct {
-	dir    string
 	mu     sync.Mutex
 	staged map[string]StagedAttachment
 }
 
-func newAttachmentManager(dir string) *AttachmentManager {
-	if dir == "" {
-		dir = filepath.Join("data", "attachments")
-	}
+func newAttachmentManager() *AttachmentManager {
 	return &AttachmentManager{
-		dir:    dir,
 		staged: make(map[string]StagedAttachment),
 	}
-}
-
-func (s *Service) SetAttachmentsDir(dir string) {
-	s.attachmentMgr.mu.Lock()
-	defer s.attachmentMgr.mu.Unlock()
-	s.attachmentMgr.dir = dir
-}
-
-func (s *Service) AttachmentsDir() string {
-	s.attachmentMgr.mu.Lock()
-	defer s.attachmentMgr.mu.Unlock()
-	return s.attachmentMgr.dir
 }
 
 func sanitizeFilename(name string) string {
@@ -108,7 +95,7 @@ func sanitizeFilename(name string) string {
 	return result
 }
 
-// StageAttachment validates and stores an uploaded attachment file in temporary stage.
+// StageAttachment validates and temporarily stores an uploaded attachment file in memory.
 func (s *Service) StageAttachment(ctx context.Context, userID, channelID, filename string, r io.Reader) (AttachmentSummary, error) {
 	if err := s.canPost(ctx, userID, channelID); err != nil {
 		return AttachmentSummary{}, err
@@ -125,48 +112,20 @@ func (s *Service) StageAttachment(ctx context.Context, userID, channelID, filena
 	}
 	id := hex.EncodeToString(randomBytes[:])
 
-	baseDir := s.AttachmentsDir()
-	now := time.Now()
-	dayDir := filepath.Join(baseDir, now.Format("2006-01-02"))
-	if err := os.MkdirAll(dayDir, 0o700); err != nil {
-		return AttachmentSummary{}, fmt.Errorf("create attachment directory: %w", err)
-	}
-
-	destFilename := fmt.Sprintf("%s_%s", id, sanitized)
-	destPath := filepath.Join(dayDir, destFilename)
-	absPath, err := filepath.Abs(destPath)
-	if err != nil {
-		return AttachmentSummary{}, fmt.Errorf("resolve attachment absolute path: %w", err)
-	}
-
-	f, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
-	if err != nil {
-		return AttachmentSummary{}, fmt.Errorf("create attachment file: %w", err)
-	}
-	defer f.Close()
-
-	// Enforce MaxAttachmentFileBytes + 1 limit while copying
+	// Read limited content into memory
 	limited := io.LimitReader(r, MaxAttachmentFileBytes+1)
-	written, err := io.Copy(f, limited)
+	data, err := io.ReadAll(limited)
 	if err != nil {
-		_ = os.Remove(destPath)
-		return AttachmentSummary{}, fmt.Errorf("write attachment file: %w", err)
+		return AttachmentSummary{}, fmt.Errorf("read attachment file: %w", err)
 	}
-	if written > MaxAttachmentFileBytes {
-		_ = os.Remove(destPath)
+	if len(data) > MaxAttachmentFileBytes {
 		return AttachmentSummary{}, fmt.Errorf("%w: ファイルサイズが上限（20 MiB）を超えています", ErrInvalid)
 	}
-	if written == 0 {
-		_ = os.Remove(destPath)
+	if len(data) == 0 {
 		return AttachmentSummary{}, fmt.Errorf("%w: ファイルが空です", ErrInvalid)
 	}
 
-	// Guarantee disk flush before returning
-	if err := f.Sync(); err != nil {
-		_ = os.Remove(destPath)
-		return AttachmentSummary{}, fmt.Errorf("sync attachment file: %w", err)
-	}
-
+	now := time.Now()
 	s.attachmentMgr.mu.Lock()
 	defer s.attachmentMgr.mu.Unlock()
 
@@ -183,25 +142,25 @@ func (s *Service) StageAttachment(ctx context.Context, userID, channelID, filena
 		ChannelID: channelID,
 		UserID:    userID,
 		Filename:  sanitized,
-		Size:      written,
-		Path:      absPath,
+		Size:      int64(len(data)),
+		Data:      data,
 		CreatedAt: now,
 	}
 
 	return AttachmentSummary{
 		ID:       id,
 		Filename: sanitized,
-		Size:     written,
+		Size:     int64(len(data)),
 	}, nil
 }
 
 // consumeStagedAttachments claims staged attachments and checks totals.
-func (s *Service) consumeStagedAttachments(userID, channelID string, ids []string) ([]domain.Attachment, error) {
+func (s *Service) consumeStagedAttachments(userID, channelID string, ids []string) ([]domain.Attachment, []AIAttachmentPayload, error) {
 	if len(ids) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if len(ids) > MaxAttachmentCount {
-		return nil, fmt.Errorf("%w: 添付ファイルは1回の投稿につき%d件までです", ErrInvalid, MaxAttachmentCount)
+		return nil, nil, fmt.Errorf("%w: 添付ファイルは1回の投稿につき%d件までです", ErrInvalid, MaxAttachmentCount)
 	}
 
 	s.attachmentMgr.mu.Lock()
@@ -209,29 +168,33 @@ func (s *Service) consumeStagedAttachments(userID, channelID string, ids []strin
 
 	seen := make(map[string]bool, len(ids))
 	result := make([]domain.Attachment, 0, len(ids))
+	payloads := make([]AIAttachmentPayload, 0, len(ids))
 	var totalSize int64
 
 	for _, id := range ids {
 		if seen[id] {
-			return nil, fmt.Errorf("%w: 重複した添付ファイルIDが指定されています", ErrInvalid)
+			return nil, nil, fmt.Errorf("%w: 重複した添付ファイルIDが指定されています", ErrInvalid)
 		}
 		seen[id] = true
 
 		staged, ok := s.attachmentMgr.staged[id]
 		if !ok || staged.ChannelID != channelID || staged.UserID != userID {
-			return nil, fmt.Errorf("%w: 添付ファイルが見つからないか、有効期限が切れています", ErrNotFound)
+			return nil, nil, fmt.Errorf("%w: 添付ファイルが見つからないか、有効期限が切れています", ErrNotFound)
 		}
 
 		totalSize += staged.Size
 		if totalSize > MaxAttachmentTotalBytes {
-			return nil, fmt.Errorf("%w: 添付ファイルの合計サイズが上限（50 MiB）を超えています", ErrInvalid)
+			return nil, nil, fmt.Errorf("%w: 添付ファイルの合計サイズが上限（50 MiB）を超えています", ErrInvalid)
 		}
 
 		result = append(result, domain.Attachment{
 			ID:       staged.ID,
 			Filename: staged.Filename,
 			Size:     staged.Size,
-			Path:     staged.Path,
+		})
+		payloads = append(payloads, AIAttachmentPayload{
+			Name:   staged.Filename,
+			Base64: base64.StdEncoding.EncodeToString(staged.Data),
 		})
 	}
 
@@ -240,48 +203,5 @@ func (s *Service) consumeStagedAttachments(userID, channelID string, ids []strin
 		delete(s.attachmentMgr.staged, id)
 	}
 
-	return result, nil
-}
-
-// CleanupAttachments removes attachment directories and files created before the given cutoff date (day-level).
-func (s *Service) CleanupAttachments(cutoff time.Time) (int, error) {
-	baseDir := s.AttachmentsDir()
-	entries, err := os.ReadDir(baseDir)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return 0, nil
-		}
-		return 0, err
-	}
-
-	cutoffDate := time.Date(cutoff.Year(), cutoff.Month(), cutoff.Day(), 0, 0, 0, 0, cutoff.Location())
-	deleted := 0
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		d, parseErr := time.Parse("2006-01-02", name)
-		if parseErr == nil {
-			if d.Before(cutoffDate) {
-				subPath := filepath.Join(baseDir, name)
-				if err := os.RemoveAll(subPath); err == nil {
-					deleted++
-				}
-			}
-			continue
-		}
-		// Also support legacy YYYYMM format if any
-		if ym, err := time.Parse("200601", name); err == nil {
-			cutoffMonth := time.Date(cutoff.Year(), cutoff.Month(), 1, 0, 0, 0, 0, cutoff.Location())
-			if ym.Before(cutoffMonth) {
-				subPath := filepath.Join(baseDir, name)
-				if err := os.RemoveAll(subPath); err == nil {
-					deleted++
-				}
-			}
-		}
-	}
-	return deleted, nil
+	return result, payloads, nil
 }

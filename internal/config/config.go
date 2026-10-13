@@ -68,7 +68,7 @@ const DefaultFilename = "minihub.json"
 
 func Defaults() Config {
 	return Config{
-		Storage: Storage{Type: "file"},
+		Storage: Storage{Type: "sqlite"},
 		Version: 1,
 		Server:  Server{ListenAddress: "127.0.0.1:8080", DataDir: "data", SessionTTL: "12h"},
 		UI: UI{
@@ -105,8 +105,8 @@ func Load(path string, explicit bool) (Config, bool, error) {
 	if err := ValidateAIAccounts(cfg.AIAccounts); err != nil {
 		return cfg, false, err
 	}
-	if cfg.Storage.Type != "file" && cfg.Storage.Type != "sqlite" {
-		return cfg, false, errors.New("storage.type must be file or sqlite")
+	if cfg.Storage.Type != "sqlite" {
+		return cfg, false, errors.New("storage.type must be sqlite; file storage has been discontinued (use minihub migrate -to sqlite)")
 	}
 	cfg.Server.BasePath, err = NormalizeBasePath(cfg.Server.BasePath)
 	if err != nil {

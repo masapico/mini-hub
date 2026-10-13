@@ -2,12 +2,11 @@ package main
 
 import (
 	"context"
-	"github.com/masapico/minihub/internal/domain"
-	"github.com/masapico/minihub/internal/storage/backend"
-	"github.com/masapico/minihub/internal/storage/filestore"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/masapico/minihub/internal/storage/backend"
 )
 
 func TestMigrationCommandConfigAndDataOverride(t *testing.T) {
@@ -17,21 +16,21 @@ func TestMigrationCommandConfigAndDataOverride(t *testing.T) {
 		t.Fatal(err)
 	}
 	root := filepath.Join(dir, "source")
-	s, err := filestore.New(root)
-	if err != nil {
+	usersDir := filepath.Join(root, "users")
+	if err := os.MkdirAll(usersDir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err = s.SaveUser(context.Background(), &domain.User{ID: "u"}); err != nil {
+	if err := os.WriteFile(filepath.Join(usersDir, "u.json"), []byte(`{"version":1,"id":"u","name":"u","enabled":true,"role":"user"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	args := []string{"-config", config, "-data", root, "-to", "sqlite"}
-	if err = migrate(append(args, "-dry-run")); err != nil {
+	if err := migrate(append(args, "-dry-run")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = os.Stat(filepath.Join(root, backend.DBName)); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(root, backend.DBName)); !os.IsNotExist(err) {
 		t.Fatal("dry-run published")
 	}
-	if err = migrate(args); err != nil {
+	if err := migrate(args); err != nil {
 		t.Fatal(err)
 	}
 	h, err := backend.Open(root, "sqlite")
