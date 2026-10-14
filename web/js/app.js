@@ -29,6 +29,7 @@ const S = {
     groupMember = (c) =>
         c?.groups?.some((id) => S.me?.groups?.includes(id)),
     member = (c) => directMember(c) || groupMember(c);
+window.S = S;
 
 function messageDisplayText(message) {
 	if (message.withdrawnAt) return "取り消されました";

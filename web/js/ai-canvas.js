@@ -6,6 +6,7 @@
     const State = {
         open: false,
         activeAccountID: "",
+        accounts: [],
         messages: [],
         quota: { dailyQuota: 0, dailyUsed: 0, enabled: true },
         stagedAttachments: [],
@@ -85,20 +86,178 @@
         }
     }
 
+    function getAssistantDisplayName(msg) {
+        if (!msg) return "AI";
+        const accounts = State.accounts.length ? State.accounts : (window.S?.aiAccounts || []);
+        if (msg.accountId) {
+            const found = accounts.find(a => a.id === msg.accountId);
+            if (found?.name) return found.name;
+        }
+        if (msg.accountName) {
+            const foundById = accounts.find(a => a.id === msg.accountName);
+            if (foundById?.name) return foundById.name;
+            const foundByName = accounts.find(a => a.name === msg.accountName);
+            if (foundByName?.name) return foundByName.name;
+            return msg.accountName;
+        }
+        const active = accounts.find(a => a.id === State.activeAccountID);
+        return active?.name || "AI";
+    }
+
+    function formatMsgTime(isoStr) {
+        if (!isoStr) return "";
+        try {
+            const d = new Date(isoStr);
+            if (isNaN(d.getTime())) return "";
+            return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+        } catch {
+            return "";
+        }
+    }
+
+    function convertMarkdownToWordHtml(markdownText) {
+        if (!markdownText) return "";
+        let html = "";
+        if (typeof marked !== "undefined" && marked.parse) {
+            try {
+                html = marked.parse(markdownText, { gfm: true, breaks: true });
+            } catch {
+                html = "";
+            }
+        }
+        if (!html) {
+            const escapeHtml = (str) =>
+                str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            html = markdownText.split("\n").map(l => `<p>${escapeHtml(l)}</p>`).join("");
+        }
+
+        const tempDiv = document.createElement("div");
+        tempDiv.innerHTML = html;
+
+        // Apply Word-compatible inline styling
+        tempDiv.querySelectorAll("table").forEach(table => {
+            table.setAttribute("border", "1px");
+            table.style.borderCollapse = "collapse";
+            table.style.width = "100%";
+            table.style.margin = "8pt 0";
+        });
+        tempDiv.querySelectorAll("th").forEach(th => {
+            th.style.border = "1px solid #94a3b8";
+            th.style.padding = "6pt 8pt";
+            th.style.backgroundColor = "#f1f5f9";
+            th.style.fontWeight = "bold";
+            th.style.textAlign = "left";
+        });
+        tempDiv.querySelectorAll("td").forEach(td => {
+            td.style.border = "1px solid #cbd5e1";
+            td.style.padding = "6pt 8pt";
+        });
+        tempDiv.querySelectorAll("blockquote").forEach(bq => {
+            bq.style.borderLeft = "3px solid #cbd5e1";
+            bq.style.paddingLeft = "10pt";
+            bq.style.marginLeft = "0";
+            bq.style.color = "#475569";
+        });
+        tempDiv.querySelectorAll("pre").forEach(pre => {
+            pre.style.backgroundColor = "#f8fafc";
+            pre.style.border = "1px solid #e2e8f0";
+            pre.style.padding = "8pt";
+            pre.style.fontFamily = "Consolas, 'Courier New', monospace";
+            pre.style.fontSize = "10pt";
+        });
+        tempDiv.querySelectorAll("code").forEach(code => {
+            if (code.parentElement?.tagName !== "PRE") {
+                code.style.backgroundColor = "#f1f5f9";
+                code.style.padding = "1pt 4pt";
+                code.style.fontFamily = "Consolas, 'Courier New', monospace";
+                code.style.fontSize = "10pt";
+            }
+        });
+
+        return tempDiv.innerHTML;
+    }
+
+    async function copyMessageToClipboard(text, buttonEl) {
+        const htmlContent = convertMarkdownToWordHtml(text);
+        let copied = false;
+
+        if (navigator.clipboard?.write && window.ClipboardItem) {
+            try {
+                const htmlBlob = new Blob([htmlContent], { type: "text/html" });
+                const textBlob = new Blob([text], { type: "text/plain" });
+                await navigator.clipboard.write([
+                    new ClipboardItem({
+                        "text/html": htmlBlob,
+                        "text/plain": textBlob,
+                    }),
+                ]);
+                copied = true;
+            } catch (e) {
+                console.warn("ClipboardItem write failed:", e);
+            }
+        }
+
+        if (!copied) {
+            if (navigator.clipboard?.writeText) {
+                try {
+                    await navigator.clipboard.writeText(text);
+                    copied = true;
+                } catch (_) {}
+            }
+            if (!copied && window.fallbackCopyText) {
+                window.fallbackCopyText(text);
+                copied = true;
+            }
+        }
+
+        if (copied) {
+            window.note?.("クリップボードにコピーしました（Word貼り付け対応）");
+            if (buttonEl) {
+                const origContent = Array.from(buttonEl.childNodes);
+                buttonEl.innerHTML = "";
+                buttonEl.append(window.svgIcon("check"), document.createTextNode(" コピー完了"));
+                buttonEl.classList.add("copied");
+                setTimeout(() => {
+                    buttonEl.innerHTML = "";
+                    origContent.forEach(node => buttonEl.append(node));
+                    buttonEl.classList.remove("copied");
+                }, 2000);
+            }
+        } else {
+            window.note?.("コピーに失敗しました", true);
+        }
+    }
+
     function renderMessage(msg) {
+        const isAssistant = msg.role === "assistant";
         const wrap = document.createElement("div");
         wrap.className = `ai-canvas-msg ${msg.role}`;
 
         const meta = document.createElement("div");
         meta.className = "ai-canvas-msg-meta";
-        const roleIcon = msg.role === "assistant" ? window.svgIcon("robot") : window.svgIcon("person");
-        meta.append(roleIcon);
-        meta.append(document.createTextNode(msg.role === "assistant" ? (msg.accountName || "AI") : "あなた"));
+
+        const senderSpan = document.createElement("span");
+        senderSpan.className = "ai-canvas-msg-sender";
+        const roleIcon = isAssistant ? window.svgIcon("robot") : window.svgIcon("person");
+        roleIcon.classList.add("ai-canvas-role-icon");
+        senderSpan.append(roleIcon);
+        const nameText = isAssistant ? getAssistantDisplayName(msg) : "あなた";
+        senderSpan.append(document.createTextNode(` ${nameText}`));
+        meta.append(senderSpan);
+
+        const timeStr = formatMsgTime(msg.ts);
+        if (timeStr) {
+            const timeEl = document.createElement("time");
+            timeEl.className = "ai-canvas-msg-time";
+            timeEl.textContent = timeStr;
+            meta.append(timeEl);
+        }
+
         wrap.append(meta);
 
         const body = document.createElement("div");
         body.className = "ai-canvas-msg-body";
-        if (msg.role === "assistant") {
+        if (isAssistant) {
             if (typeof window.renderMessageMarkdown === "function") {
                 body.append(window.renderMessageMarkdown(msg.content));
             } else if (window.marked?.parse) {
@@ -118,26 +277,17 @@
         }
         wrap.append(body);
 
-        if (msg.role === "assistant") {
+        if (isAssistant) {
             const actions = document.createElement("div");
             actions.className = "ai-canvas-msg-actions";
 
-            // 1. Copy
+            // 1. Copy (Word compatible)
             const copyBtn = document.createElement("button");
             copyBtn.type = "button";
             copyBtn.className = "ai-canvas-action-btn";
-            copyBtn.title = "クリップボードにコピー";
+            copyBtn.title = "クリップボードにコピー（Word貼り付け対応）";
             copyBtn.append(window.svgIcon("clipboard"), document.createTextNode(" コピー"));
-            copyBtn.onclick = () => {
-                if (navigator.clipboard?.writeText) {
-                    navigator.clipboard.writeText(msg.content).then(() => {
-                        window.note?.("クリップボードにコピーしました");
-                    });
-                } else {
-                    window.fallbackCopyText?.(msg.content);
-                    window.note?.("クリップボードにコピーしました");
-                }
-            };
+            copyBtn.onclick = () => copyMessageToClipboard(msg.content, copyBtn);
             actions.append(copyBtn);
 
             // 2. Insert into composer
@@ -150,17 +300,6 @@
                 insertIntoComposer(msg.content);
             };
             actions.append(insertBtn);
-
-            // 3. Share to channel
-            const shareBtn = document.createElement("button");
-            shareBtn.type = "button";
-            shareBtn.className = "ai-canvas-action-btn";
-            shareBtn.title = "現在のチャンネルに共有";
-            shareBtn.append(window.svgIcon("chat-quote"), document.createTextNode(" チャンネルに共有"));
-            shareBtn.onclick = () => {
-                shareToCurrentChannel(msg.content, msg.accountName);
-            };
-            actions.append(shareBtn);
 
             wrap.append(actions);
         }
@@ -176,7 +315,7 @@
         if (State.messages.length === 0) {
             const welcome = document.createElement("div");
             welcome.className = "ai-canvas-welcome p-3 text-muted small";
-            welcome.innerHTML = `<p class="mb-1">自分専用の作業・下書き用キャンバスです。ここでの対話は他ユーザーには公開されません。</p><p class="mb-0">下書きの推敲や質問を行い、「入力欄に挿入」や「チャンネルに共有」でチームに還元できます。</p>`;
+            welcome.innerHTML = `<p class="mb-1">自分専用の作業・下書き用キャンバスです。ここでの対話は他ユーザーには公開されません。</p><p class="mb-0">下書きの推敲や質問を行い、「コピー」や「入力欄に挿入」でチームチャットに活用できます。</p>`;
             container.append(welcome);
             return;
         }
@@ -204,30 +343,6 @@
         window.note?.("入力欄に下書きを挿入しました");
     }
 
-    async function shareToCurrentChannel(text, accountName) {
-        const currentChannel = window.S?.channel;
-        if (!currentChannel) {
-            window.note?.("共有先のチャンネルを選択してください", true);
-            return;
-        }
-
-        const quote = `> 💡 **AIキャンバスのメモを共有しました** (${accountName || "AI"})\n> \n` +
-            text.split("\n").map(l => `> ${l}`).join("\n");
-
-        if (!confirm(`現在のチャンネル「${currentChannel.name}」にこの回答を共有しますか？`)) {
-            return;
-        }
-
-        try {
-            await window.api(`/api/channels/${encodeURIComponent(currentChannel.id)}/messages`, {
-                method: "POST",
-                body: JSON.stringify({ text: quote }),
-            });
-            window.note?.(`チャンネル「${currentChannel.name}」に共有しました`);
-        } catch (err) {
-            window.note?.(`共有に失敗しました: ${err.message}`, true);
-        }
-    }
 
     async function updateAccountsDropdown() {
         const select = $("aiCanvasAccountSelect");
@@ -253,6 +368,7 @@
                 accounts = [];
             }
         }
+        State.accounts = Array.isArray(accounts) ? accounts : [];
 
         if (!accounts || accounts.length === 0) {
             if (toggleBtn) toggleBtn.classList.add("hidden");
@@ -337,7 +453,8 @@
             return;
         }
 
-        const selectedAccount = window.S?.aiAccounts?.find(a => a.id === accountID);
+        const accounts = State.accounts.length ? State.accounts : (window.S?.aiAccounts || []);
+        const selectedAccount = accounts.find(a => a.id === accountID);
         const accountName = selectedAccount?.name || accountID;
 
         // User message
@@ -373,6 +490,7 @@
             State.messages.push({
                 role: "assistant",
                 content: reply,
+                accountId: accountID,
                 accountName: accountName,
                 ts: new Date().toISOString(),
             });
@@ -393,6 +511,7 @@
             State.messages.push({
                 role: "assistant",
                 content: `⚠️ ${errMsg}`,
+                accountId: accountID,
                 accountName: "システム",
                 ts: new Date().toISOString(),
             });

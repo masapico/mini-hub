@@ -23,7 +23,7 @@
     "aiDailyQuota": 0
   },
   "notifications": {
-    "mentionRetentionDays": 365,
+    "mentionRetentionDays": 14,
     "osNotificationsEnabled": true
   },
   "retention": {
