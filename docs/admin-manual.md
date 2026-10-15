@@ -77,6 +77,8 @@ go run ./cmd/minihub -config minihub.json
 
 通常起動時のサーバーログは `server.dataDir/server.log` に JSON 形式で追記します。`-data` を指定した場合は、そのディレクトリの `server.log` に出力します。再起動時に既存のログは消去されず、ローテーションも行いません。設定を読み込めない場合やログファイルを開けない場合のエラーは、標準エラーに表示します。
 
+接続数の推移記録は `server.dataDir/connection_counts.log` に JSON Lines 形式で定期追記します（デフォルト10分間隔）。`logging.connectionCounts.enabled` および `logging.connectionCounts.interval`（例: `"10m"`）で記録の有無や間隔を設定できます。また、Web画面上（左サイドバーのステータス付近）には現在チャットに接続中のユーザー数がリアルタイムに表示されます。
+
 `-config` を省略した場合は、カレントディレクトリの `minihub.json` があれば自動的に読み込みます。明示した設定ファイルがない場合や、読み込んだ設定が不正な場合はエラーになります。初期管理者の環境変数は `MINIHUB_ADMIN_PASSWORD` を使用します。設定ファイルがない場合は、次のように待受アドレスとデータディレクトリをCLIフラグで指定できます。
 
 ```bash

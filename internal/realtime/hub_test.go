@@ -359,3 +359,68 @@ func TestCommittedHTTPMessageProducesRealtimeEvent(t *testing.T) {
 		t.Fatalf("unexpected event: %#v", event)
 	}
 }
+
+func TestOnlineCountWatchAndConnectionStats(t *testing.T) {
+	currentUserID := "alice"
+	hub := realtime.New(
+		func(*http.Request) (string, error) { return currentUserID, nil },
+		func(context.Context, string, string) bool { return true },
+		func(context.Context, string, string) bool { return true },
+		nil,
+	)
+	defer hub.Close()
+
+	server := httptest.NewServer(hub)
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/"
+	currentUserID = "user-1"
+	conn1, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn1.Close()
+
+	currentUserID = "user-2"
+	conn2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn2.Close()
+
+	onlineUsers, totalConns := hub.ConnectionStats()
+	if onlineUsers != 2 || totalConns != 2 {
+		t.Fatalf("expected 2 users, 2 conns; got %d users, %d conns", onlineUsers, totalConns)
+	}
+
+	// conn1 registers for online count watch
+	if err := conn1.WriteJSON(realtime.Event{Type: "online_count_watch"}); err != nil {
+		t.Fatal(err)
+	}
+	_ = conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+	var event realtime.Event
+	if err := conn1.ReadJSON(&event); err != nil {
+		t.Fatal(err)
+	}
+	if event.Type != "online_count" || event.OnlineCount != 2 {
+		t.Fatalf("expected onlineCount=2, got %#v", event)
+	}
+
+	// conn2 disconnects
+	_ = conn2.Close()
+
+	// conn1 should receive updated onlineCount=1 after debounce flush
+	_ = conn1.SetReadDeadline(time.Now().Add(3 * time.Second))
+	if err := conn1.ReadJSON(&event); err != nil {
+		t.Fatal(err)
+	}
+	if event.Type != "online_count" || event.OnlineCount != 1 {
+		t.Fatalf("expected onlineCount=1, got %#v", event)
+	}
+
+	onlineUsers, totalConns = hub.ConnectionStats()
+	if onlineUsers != 1 || totalConns != 1 {
+		t.Fatalf("expected 1 user, 1 conn; got %d users, %d conns", onlineUsers, totalConns)
+	}
+}
+

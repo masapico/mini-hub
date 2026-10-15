@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 )
 
 func TestStorageFieldRejected(t *testing.T) {
@@ -152,3 +153,43 @@ func TestPlainCredentialsRequirePrivatePermissions(t *testing.T) {
 		}
 	}
 }
+
+func TestConnectionCountsConfig(t *testing.T) {
+	// Defaults
+	cfg := Defaults()
+	if !cfg.Logging.ConnectionCounts.IsEnabled() {
+		t.Fatal("expected default ConnectionCounts to be enabled")
+	}
+	if cfg.Logging.ConnectionCounts.ParsedInterval() != 10*time.Minute {
+		t.Fatalf("expected default interval 10m, got %v", cfg.Logging.ConnectionCounts.ParsedInterval())
+	}
+
+	// Custom valid config
+	dir := t.TempDir()
+	path := filepath.Join(dir, "minihub.json")
+	body := `{"version":1,"logging":{"connectionCounts":{"enabled":false,"interval":"5m"}}}`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loadedCfg, loaded, err := Load(path, true)
+	if err != nil || !loaded {
+		t.Fatalf("load failed: %v", err)
+	}
+	if loadedCfg.Logging.ConnectionCounts.IsEnabled() {
+		t.Fatal("expected disabled connectionCounts")
+	}
+	if loadedCfg.Logging.ConnectionCounts.ParsedInterval() != 5*time.Minute {
+		t.Fatalf("expected 5m interval, got %v", loadedCfg.Logging.ConnectionCounts.ParsedInterval())
+	}
+
+	// Invalid interval
+	invalidBody := `{"version":1,"logging":{"connectionCounts":{"interval":"0s"}}}`
+	pathInvalid := filepath.Join(dir, "invalid.json")
+	if err := os.WriteFile(pathInvalid, []byte(invalidBody), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := Load(pathInvalid, true); err == nil {
+		t.Fatal("expected error for non-positive interval")
+	}
+}
+

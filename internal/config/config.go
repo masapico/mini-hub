@@ -53,7 +53,30 @@ type Retention struct {
 	Days int `json:"days"`
 }
 type Logging struct {
-	Level string `json:"level"`
+	Level            string           `json:"level"`
+	ConnectionCounts ConnectionCounts `json:"connectionCounts"`
+}
+type ConnectionCounts struct {
+	Enabled  *bool  `json:"enabled,omitempty"`
+	Interval string `json:"interval,omitempty"`
+}
+
+func (c ConnectionCounts) IsEnabled() bool {
+	if c.Enabled == nil {
+		return true
+	}
+	return *c.Enabled
+}
+
+func (c ConnectionCounts) ParsedInterval() time.Duration {
+	if c.Interval == "" {
+		return 10 * time.Minute
+	}
+	d, err := time.ParseDuration(c.Interval)
+	if err != nil || d <= 0 {
+		return 10 * time.Minute
+	}
+	return d
 }
 type InitialAdmin struct {
 	ID       string `json:"id"`
@@ -73,9 +96,17 @@ func Defaults() Config {
 		},
 		Features:      Features{NetworkPathMode: "copy", AICanvasEnabled: true, AIDailyQuota: 0},
 		Notifications: Notifications{MentionRetentionDays: 365, OSNotificationsEnabled: true},
-		Logging:       Logging{Level: "info"},
+		Logging: Logging{
+			Level: "info",
+			ConnectionCounts: ConnectionCounts{
+				Enabled:  boolPtr(true),
+				Interval: "10m",
+			},
+		},
 	}
 }
+
+func boolPtr(b bool) *bool { return &b }
 
 func Load(path string, explicit bool) (Config, bool, error) {
 	cfg := Defaults()
@@ -149,6 +180,19 @@ func Load(path string, explicit bool) (Config, bool, error) {
 	}
 	if cfg.Logging.Level != "debug" && cfg.Logging.Level != "info" && cfg.Logging.Level != "warn" && cfg.Logging.Level != "error" {
 		return cfg, false, errors.New("logging.level must be debug, info, warn, or error")
+	}
+	if cfg.Logging.ConnectionCounts.Enabled == nil {
+		cfg.Logging.ConnectionCounts.Enabled = boolPtr(true)
+	}
+	if cfg.Logging.ConnectionCounts.Interval == "" {
+		cfg.Logging.ConnectionCounts.Interval = "10m"
+	}
+	connInterval, err := time.ParseDuration(cfg.Logging.ConnectionCounts.Interval)
+	if err != nil {
+		return cfg, false, fmt.Errorf("invalid logging.connectionCounts.interval: %w", err)
+	}
+	if connInterval <= 0 {
+		return cfg, false, errors.New("logging.connectionCounts.interval must be positive")
 	}
 	if cfg.Features.NetworkPathMode != "disabled" && cfg.Features.NetworkPathMode != "copy" && cfg.Features.NetworkPathMode != "open-and-copy" {
 		return cfg, false, errors.New("features.networkPathMode must be disabled, copy, or open-and-copy")

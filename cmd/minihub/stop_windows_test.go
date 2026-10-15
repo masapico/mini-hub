@@ -20,7 +20,7 @@ func TestStopWaitsForDataLockRelease(t *testing.T) {
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(root, "minihub.json")
-	if err := os.WriteFile(configPath, []byte(`{"version":1,"storage":{"type":"sqlite"},"server":{"dataDir":"data"}}`), 0600); err != nil {
+	if err := os.WriteFile(configPath, []byte(`{"version":1,"server":{"dataDir":"data"}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	lock, err := backend.Lock(dataDir)
@@ -65,7 +65,7 @@ func TestStopFailsIfAnotherProcessHoldsDataLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(root, "minihub.json")
-	if err := os.WriteFile(configPath, []byte(`{"version":1,"storage":{"type":"sqlite"},"server":{"dataDir":"data"}}`), 0600); err != nil {
+	if err := os.WriteFile(configPath, []byte(`{"version":1,"server":{"dataDir":"data"}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	lock, err := backend.Lock(dataDir)

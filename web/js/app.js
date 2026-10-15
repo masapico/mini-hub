@@ -202,6 +202,9 @@ function setConnectionStatus(label, connected = false) {
     const status = $("status");
     status.textContent = label;
     status.classList.toggle("connected", connected);
+    if (!connected) {
+        $("onlineUsersBadge")?.classList.add("hidden");
+    }
 }
 function setup(me) {
     S.me = me;
@@ -4047,6 +4050,7 @@ realtime = function () {
     S.ws = socket;
     socket.onopen = () => {
         if (S.ws === socket) {
+            socket.send(JSON.stringify({type: "online_count_watch"}));
             for (const channelID of S.presenceRefs.keys())
                 socket.send(JSON.stringify({type: "presence_watch", channelId: channelID}));
             setConnectionStatus("接続中", true);
@@ -4073,6 +4077,16 @@ realtime = function () {
         try {
             message = JSON.parse(event.data);
         } catch {
+            return;
+        }
+        if (message.type === "online_count") {
+            const badge = $("onlineUsersBadge");
+            const countSpan = $("onlineUsersCount");
+            if (badge && countSpan && typeof message.onlineCount === "number") {
+                const count = message.onlineCount;
+                countSpan.textContent = count === 1 ? "1 user" : `${count} users`;
+                badge.classList.remove("hidden");
+            }
             return;
         }
         if (message.type === "typing_start" || message.type === "typing_stop") {

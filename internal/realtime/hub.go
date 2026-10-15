@@ -18,7 +18,8 @@ const (
 	pongWait         = 60 * time.Second
 	pingEvery        = 45 * time.Second
 	maxInput         = 1024
-	presenceInterval = 250 * time.Millisecond
+	presenceInterval    = 250 * time.Millisecond
+	onlineCountInterval = 1 * time.Second
 )
 
 type Event struct {
@@ -33,6 +34,7 @@ type Event struct {
 	UserID        string    `json:"userId,omitempty"`
 	TypingID      string    `json:"typingSession,omitempty"`
 	OnlineUserIDs *[]string `json:"onlineUserIds,omitempty"`
+	OnlineCount   int       `json:"onlineCount,omitempty"`
 }
 
 type AuthorizeFunc func(context.Context, string, string) bool
@@ -53,22 +55,24 @@ type Hub struct {
 	presenceCandidates PresenceCandidatesFunc
 	online             map[string]int
 	presenceTimer      *time.Timer
+	onlineCountTimer   *time.Timer
 	presenceVersion    uint64
 	presenceChanged    map[string]struct{}
 }
 
 type client struct {
-	hub         *Hub
-	conn        *websocket.Conn
-	userID      string
-	send        chan Event
-	done        chan struct{}
-	closeOnce   sync.Once
-	typingID    string
-	typingMu    sync.Mutex
-	typingScope typingScope
-	lastTyping  time.Time
-	watched     map[string]map[string]struct{}
+	hub                 *Hub
+	conn                *websocket.Conn
+	userID              string
+	send                chan Event
+	done                chan struct{}
+	closeOnce           sync.Once
+	typingID            string
+	typingMu            sync.Mutex
+	typingScope         typingScope
+	lastTyping          time.Time
+	watched             map[string]map[string]struct{}
+	watchingOnlineCount bool
 }
 
 type typingScope struct {
@@ -118,6 +122,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.online[userID]++
 	if h.online[userID] == 1 {
 		h.schedulePresenceLocked(userID)
+		h.scheduleOnlineCountLocked()
 	}
 	h.handlers.Add(1)
 	h.mu.Unlock()
@@ -135,6 +140,10 @@ func (h *Hub) Close() {
 	if h.presenceTimer != nil {
 		h.presenceTimer.Stop()
 		h.presenceTimer = nil
+	}
+	if h.onlineCountTimer != nil {
+		h.onlineCountTimer.Stop()
+		h.onlineCountTimer = nil
 	}
 	clients := make([]*client, 0, len(h.clients))
 	for c := range h.clients {
@@ -234,6 +243,43 @@ func (h *Hub) flushPresence() {
 	}
 }
 
+func (h *Hub) scheduleOnlineCountLocked() {
+	if !h.closed && h.onlineCountTimer == nil {
+		h.onlineCountTimer = time.AfterFunc(onlineCountInterval, h.flushOnlineCount)
+	}
+}
+
+func (h *Hub) flushOnlineCount() {
+	h.mu.Lock()
+	h.onlineCountTimer = nil
+	if h.closed {
+		h.mu.Unlock()
+		return
+	}
+	count := len(h.online)
+	targets := make([]*client, 0)
+	for c := range h.clients {
+		if c.watchingOnlineCount {
+			targets = append(targets, c)
+		}
+	}
+	h.mu.Unlock()
+	for _, c := range targets {
+		select {
+		case c.send <- Event{Type: "online_count", OnlineCount: count}:
+		default:
+			c.close()
+		}
+	}
+}
+
+// ConnectionStats returns unique online users count and total active WebSocket connections.
+func (h *Hub) ConnectionStats() (onlineUsers, totalConnections int) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.online), len(h.clients)
+}
+
 func (h *Hub) DisconnectUser(userID string) {
 	h.mu.RLock()
 	clients := make([]*client, 0)
@@ -296,6 +342,7 @@ func (c *client) close() {
 		if c.hub.online[c.userID] == 0 {
 			delete(c.hub.online, c.userID)
 			c.hub.schedulePresenceLocked(c.userID)
+			c.hub.scheduleOnlineCountLocked()
 		}
 		c.hub.mu.Unlock()
 		if typing {
@@ -343,6 +390,16 @@ func (c *client) handleIncoming(event Event) {
 		scope, typing := c.clearTyping(typingScope{channelID: event.ChannelID, threadRootSeq: event.ThreadRootSeq})
 		if typing {
 			c.publishTyping("typing_stop", scope)
+		}
+	case "online_count_watch":
+		c.hub.mu.Lock()
+		c.watchingOnlineCount = true
+		count := len(c.hub.online)
+		c.hub.mu.Unlock()
+		select {
+		case c.send <- Event{Type: "online_count", OnlineCount: count}:
+		default:
+			c.close()
 		}
 	case "presence_watch":
 		if event.ChannelID == "" || c.hub.presenceCandidates == nil {

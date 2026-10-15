@@ -21,6 +21,7 @@ import (
 	"github.com/masapico/minihub/internal/realtime"
 	"github.com/masapico/minihub/internal/service"
 	"github.com/masapico/minihub/internal/shutdown"
+	"github.com/masapico/minihub/internal/stats"
 	"github.com/masapico/minihub/internal/storage/backend"
 	"github.com/masapico/minihub/web"
 )
@@ -137,6 +138,32 @@ func run() (runErr error) {
 		return err
 	}
 	defer svc.CloseAI()
+	if cfg.Logging.ConnectionCounts.IsEnabled() {
+		enabledUsersProvider := func(ctx context.Context) (int, error) {
+			users, err := store.ListUsers(ctx)
+			if err != nil {
+				return 0, err
+			}
+			count := 0
+			for _, u := range users {
+				if u.Enabled {
+					count++
+				}
+			}
+			return count, nil
+		}
+		recorder, err := stats.NewRecorder(*dataDir, cfg.Logging.ConnectionCounts.ParsedInterval(), hub.ConnectionStats, enabledUsersProvider, logger)
+		if err != nil {
+			logger.Warn("initialize connection counts recorder", "error", err)
+		} else {
+			recorder.Start(ctx)
+			defer func() {
+				if err := recorder.Close(); err != nil {
+					logger.Warn("close connection counts recorder", "error", err)
+				}
+			}()
+		}
+	}
 	mux := http.NewServeMux()
 	mux.Handle("/api/realtime", hub)
 	mux.Handle("/api/", httpapi.New(svc, sessions, logger))

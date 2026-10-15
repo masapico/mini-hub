@@ -29,6 +29,7 @@ func fixture(t *testing.T) (string, []licenseFile) {
 		"dependency/LICENSE":          "dependency notice",
 		"minihub.json":                "PRIVATE CONFIG",
 		"data/server.log":             "PRIVATE LOG",
+		"data/connection_counts.log":  "PRIVATE LOG",
 		"data/minuhub.db":             "PRIVATE DATABASE",
 		"docs_html/private.key":       "PRIVATE KEY",
 		"docs_html/cert.pem":          "PRIVATE CERTIFICATE",

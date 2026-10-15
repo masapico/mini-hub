@@ -51,6 +51,7 @@ unset MINIHUB_ADMIN_PASSWORD</code></pre>
 <pre><code>go run ./cmd/minihub -config minihub.json</code></pre>
 <p><code>-config</code> には使用する設定ファイルのパスを指定します。設定ファイル内の相対的な <code>dataDir</code> は、設定ファイルの所在ディレクトリを基準に解決されます。設定変更後はサービスを再起動してください。</p>
 <p>通常起動時のサーバーログは <code>server.dataDir/server.log</code> に JSON 形式で追記します。<code>-data</code> を指定した場合は、そのディレクトリの <code>server.log</code> に出力します。再起動時に既存のログは消去されず、ローテーションも行いません。設定を読み込めない場合やログファイルを開けない場合のエラーは、標準エラーに表示します。</p>
+<p>接続数の推移記録は <code>server.dataDir/connection_counts.log</code> に JSON Lines 形式で定期追記します（デフォルト10分間隔）。<code>logging.connectionCounts.enabled</code> および <code>logging.connectionCounts.interval</code>（例: <code>"10m"</code>）で記録の有無や間隔を設定できます。また、Web画面上（左サイドバーのステータス付近）には現在チャットに接続中のユーザー数がリアルタイムに表示されます。</p>
 <p><code>-config</code> を省略した場合は、カレントディレクトリの <code>minihub.json</code> があれば自動的に読み込みます。明示した設定ファイルがない場合や、読み込んだ設定が不正な場合はエラーになります。初期管理者の環境変数は <code>MINIHUB_ADMIN_PASSWORD</code> を使用します。設定ファイルがない場合は、次のように待受アドレスとデータディレクトリをCLIフラグで指定できます。</p>
 <pre><code>./minihub -addr 127.0.0.1:8080 -data ./data</code></pre>
 <p>閉域内の他のパソコンから接続させる場合は、すべてのIPv4ネットワークインターフェースで待ち受ける<code>0.0.0.0:8080</code>を指定します。起動中の場合は一度停止してから実行してください。</p>

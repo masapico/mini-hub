@@ -958,6 +958,20 @@ body {
     background: #20c66a;
     box-shadow: 0 0 5px #20c66a, 0 0 9px #20c66a80;
 }
+.profile-status-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8125rem;
+    line-height: 1.2;
+}
+.online-users-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.75rem;
+    color: var(--muted, #64748b);
+}
 .logout-button {
     cursor: pointer;
 }
