@@ -20,20 +20,17 @@ func fixture(t *testing.T) (string, []licenseFile) {
 	t.Helper()
 	root := t.TempDir()
 	for name, body := range map[string]string{
-		"release/README.md":           "distribution guide",
-		"minihub.sample.json":         `{"version":1}`,
-		"scripts/backup.bat":          "@echo off\r\n",
-		"docs_html/index.html":        `<a href="admin-manual.html">Manual</a>`,
-		"docs_html/admin-manual.html": `<link rel="stylesheet" href="docs.css">`,
-		"docs_html/docs.css":          "body {}",
-		"dependency/LICENSE":          "dependency notice",
-		"minihub.json":                "PRIVATE CONFIG",
-		"data/server.log":             "PRIVATE LOG",
-		"data/connection_counts.log":  "PRIVATE LOG",
-		"data/minuhub.db":             "PRIVATE DATABASE",
-		"docs_html/private.key":       "PRIVATE KEY",
-		"docs_html/cert.pem":          "PRIVATE CERTIFICATE",
-		"docs_html/data/secret.json":  "PRIVATE DATA",
+		"release/README.md":          "distribution guide",
+		"minihub.sample.json":        `{"version":1}`,
+		"scripts/backup.bat":         "@echo off\r\n",
+		"dependency/LICENSE":         "dependency notice",
+		"minihub.json":               "PRIVATE CONFIG",
+		"data/server.log":            "PRIVATE LOG",
+		"data/connection_counts.log": "PRIVATE LOG",
+		"data/minuhub.db":            "PRIVATE DATABASE",
+		"private.key":                "PRIVATE KEY",
+		"cert.pem":                   "PRIVATE CERTIFICATE",
+		"data/secret.json":           "PRIVATE DATA",
 	} {
 		path := filepath.Join(root, filepath.FromSlash(name))
 		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
@@ -136,12 +133,9 @@ func TestReleaseContentsAndChecksums(t *testing.T) {
 			executable += ".exe"
 		}
 		want := map[string]string{
-			executable:                    target.os + "/" + target.arch,
-			"README.md":                   "distribution guide",
-			"minihub.sample.json":         `{"version":1}`,
-			"docs_html/index.html":        `<a href="admin-manual.html">Manual</a>`,
-			"docs_html/admin-manual.html": `<link rel="stylesheet" href="docs.css">`,
-			"docs_html/docs.css":          "body {}",
+			executable:            target.os + "/" + target.arch,
+			"README.md":           "distribution guide",
+			"minihub.sample.json": `{"version":1}`,
 			"licenses/example.org/dependency@v1.0.0/LICENSE": "dependency notice",
 			"BUILDINFO.txt": fmt.Sprintf("version: %s\ncommit: %s\ndirty: true\ngo: %s\ntarget: %s/%s\ncgo: disabled\n", version, info.commit, info.goVersion, target.os, target.arch),
 		}
@@ -201,7 +195,7 @@ func TestReleaseFailureLeavesNoOutput(t *testing.T) {
 				return os.WriteFile(destination, []byte("binary"), 0755)
 			}
 			if scenario == "missing-document" {
-				if err := os.Remove(filepath.Join(root, "docs_html/index.html")); err != nil {
+				if err := os.Remove(filepath.Join(root, "release/README.md")); err != nil {
 					t.Fatal(err)
 				}
 			}

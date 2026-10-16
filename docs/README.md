@@ -17,20 +17,18 @@
 図を更新するときは `internal/domain`、`internal/service`、`internal/storage`、`internal/httpapi`、`internal/realtime` と照合してください。
 
 
-## 操作資料とHTML版
+## 操作資料
 
-開発・保守用の資料はMarkdownで管理し、GitHubなどで閲覧できます。利用者・管理者へ配布する操作資料は[HTML版の一覧](../docs_html/index.html)にまとめています。`docs_html`フォルダーを丸ごとコピーし、`index.html`をブラウザで開くと閲覧できます。
+利用者・管理者向けの操作資料です。
 
-| 資料 | Markdown | HTML |
-| --- | --- | --- |
-| ユーザー向け操作マニュアル | [Markdown](user-manual.md) | [HTML](../docs_html/user-manual.html) |
-| 管理者向け操作マニュアル | [Markdown](admin-manual.md) | [HTML](../docs_html/admin-manual.html) |
-| ブラウザAPIを使ったOS通知の設定 | [Markdown](browser-notifications.md) | [HTML](../docs_html/browser-notifications.html) |
-| 保存方式 | [Markdown](sqlite.md) | [HTML](../docs_html/sqlite.html) |
-| AIアカウントと外部API連携 | [Markdown](ai.md) | [HTML](../docs_html/ai.html) |
-| 投稿の物理削除 | [Markdown](retention-proposal.md) | [HTML](../docs_html/retention-proposal.html) |
-
-操作資料の内容を変更するときは、対応するMarkdownとHTMLの両方を更新してください。HTML版の内部参照はHTMLページへリンクし、見出しのIDと目次も合わせて更新します。HTTP／HTTPSの手順はREADMEと管理者マニュアルの両形式を合わせて更新してください。HTMLは静的ファイルで、外部CSS・JavaScriptやCDNに依存しません。設計・データモデル・処理フロー・通信負荷の資料はMarkdownのみです。
+| 資料 | 内容 |
+| --- | --- |
+| [ユーザー向け操作マニュアル](user-manual.md) | チャットの操作、スレッド、リアクション、アンケート、予定調整 |
+| [管理者向け操作マニュアル](admin-manual.md) | 初期設定、ユーザー・チャンネル管理、バックアップ、HTTP/HTTPS設定 |
+| [ブラウザAPIを使ったOS通知の設定](browser-notifications.md) | ブラウザ通知・OS通知の許可手順とトラブルシューティング |
+| [保存方式](sqlite.md) | SQLite保存方式、エラー時の復旧、バックアップ |
+| [AIアカウントと外部API連携](ai.md) | AIアカウント、送信する履歴、外部APIのHTTP契約 |
+| [投稿の物理削除](retention-proposal.md) | 削除範囲、停止中の実行手順、復旧 |
 
 
 [検証手順と画面画像の更新](../tests/README.md)も参照してください。

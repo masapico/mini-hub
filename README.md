@@ -48,7 +48,7 @@
 
 [GitHub Releases](https://github.com/masapico/minihub/releases)にビルド済み版を公開します。サーバー機に合わせて、Windows x64（`windows_amd64.zip`）、Mac Apple Silicon（`darwin_arm64.tar.gz`）、Linux x64（`linux_amd64.tar.gz`）、Linux arm64（`linux_arm64.tar.gz`）を選んで展開してください。
 
-展開したフォルダーには実行ファイル、サンプル設定、導入手順、HTMLマニュアルが入っています。ビルド済み版の実行にはGoは不要です。展開先のREADME、または以下の設定・起動手順に従って起動します。ビルド済み版では「ビルドして起動する」の`go build`を省略できます。
+展開したフォルダーには実行ファイル、サンプル設定、導入手順が入っています。ビルド済み版の実行にはGoは不要です。展開先のREADME、または以下の設定・起動手順に従って起動します。ビルド済み版では「ビルドして起動する」の`go build`を省略できます。
 
 ### ソースからビルドする
 
@@ -131,12 +131,10 @@ macOS／Linux：
 
 | 目的 | 資料 |
 | --- | --- |
-| 導入・設定・バックアップ | [管理者マニュアル](docs/admin-manual.md)（[HTML版](docs_html/admin-manual.html)） |
-| チャットの使い方 | [ユーザーマニュアル](docs/user-manual.md)（[HTML版](docs_html/user-manual.html)） |
-| 保存方式・バックアップ | [SQLite保存方式](docs/sqlite.md)（[HTML版](docs_html/sqlite.html)） |
+| 導入・設定・バックアップ | [管理者マニュアル](docs/admin-manual.md) |
+| チャットの使い方 | [ユーザーマニュアル](docs/user-manual.md) |
+| 保存方式・バックアップ | [SQLite保存方式](docs/sqlite.md) |
 | APIを使う | [APIリファレンス](docs/api.md) |
 | 設計・開発・通信負荷 | [開発・保守資料一覧](docs/README.md) ／ [設計仕様](DESIGN.md) |
 | リリースビルド・手動公開 | [リリース手順](docs/releases.md) |
 | 検証・画面画像の更新 | [検証手順](tests/README.md) |
-
-操作資料の[HTML版一覧](docs_html/index.html)も利用できます。`docs_html`フォルダーを丸ごとコピーし、`index.html`をブラウザで開いて閲覧できます。

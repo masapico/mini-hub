@@ -288,9 +288,6 @@ func createRelease(root, version string, info buildInfo, licenses []licenseFile,
 				return err
 			}
 		}
-		if err := copyDocs(filepath.Join(root, "docs_html"), filepath.Join(bundle, "docs_html")); err != nil {
-			return err
-		}
 		for _, file := range licenses {
 			if err := copyFile(file.source, filepath.Join(bundle, file.destination)); err != nil {
 				return err
@@ -349,27 +346,6 @@ func copyFile(source, destination string) error {
 		return err
 	}
 	return os.WriteFile(destination, data, 0644)
-}
-
-func copyDocs(source, destination string) error {
-	// The documentation bundle only contains static HTML and CSS. Do not copy
-	// unrelated files placed alongside the manuals.
-	entries, err := os.ReadDir(source)
-	if err != nil {
-		return err
-	}
-	if _, err := os.Stat(filepath.Join(source, "index.html")); err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		ext := filepath.Ext(entry.Name())
-		if ext == ".html" || ext == ".css" {
-			if err := copyFile(filepath.Join(source, entry.Name()), filepath.Join(destination, entry.Name())); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 func writeArchive(bundle, destination, extension string) (result error) {
