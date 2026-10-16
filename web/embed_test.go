@@ -165,6 +165,7 @@ func TestHandlerServesEmbeddedAssets(t *testing.T) {
 	for _, path := range []string{
 		"/css/app.css",
 		"/js/app.js",
+		"/js/admin.js",
 		"/js/login.js",
 		"/vendor/bootstrap/bootstrap.min.css",
 		"/vendor/bootstrap/bootstrap.bundle.min.js",
@@ -758,7 +759,7 @@ func TestGroupManagerSupportsDetailMembershipAndReadOnlyUserGroups(t *testing.T)
 			t.Fatalf("group manager page does not contain %q", expected)
 		}
 	}
-	script := request(t, handler, "/js/app.js").Body.String()
+	script := request(t, handler, "/js/admin.js").Body.String()
 	for _, expected := range []string{
 		`method: "PATCH"`,
 		`changeManagedGroupMembers(add, remove)`,
@@ -782,10 +783,16 @@ func TestChannelManagerUIIncludesDelegationAndArchiveControls(t *testing.T) {
 			t.Fatalf("channel manager page does not contain %q", expected)
 		}
 	}
-	script := request(t, handler, "/js/app.js").Body.String()
-	for _, expected := range []string{`management=true`, `/members`, `addManagers`, `channels_changed`, `clearSelectedChannel()`} {
-		if !strings.Contains(script, expected) {
+	adminScript := request(t, handler, "/js/admin.js").Body.String()
+	for _, expected := range []string{`management=true`, `/members`, `addManagers`, `clearSelectedChannel()`} {
+		if !strings.Contains(adminScript, expected) {
 			t.Fatalf("channel manager script does not contain %q", expected)
+		}
+	}
+	appScript := request(t, handler, "/js/app.js").Body.String()
+	for _, expected := range []string{`channels_changed`, `clearSelectedChannel()`} {
+		if !strings.Contains(appScript, expected) {
+			t.Fatalf("channel realtime script does not contain %q", expected)
 		}
 	}
 }
