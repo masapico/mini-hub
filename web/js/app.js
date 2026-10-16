@@ -59,19 +59,21 @@ function withdrawnNotice(message) {
 
 function renderChannelAction(channel = S.channel) {
     const button = $("join"),
+        menu = $("channelMenu"),
         inherited = !!groupMember(channel),
-        direct = !!directMember(channel);
-    button.classList.toggle(
-        "hidden",
-        !channel || channel.type !== "public" || inherited,
-    );
+        direct = !!directMember(channel),
+        available = !!channel && channel.type === "public" && !inherited;
+    button.classList.toggle("hidden", !available || direct);
+    menu?.classList.toggle("hidden", !available || !direct);
     button.classList.add("join-action");
-    button.classList.toggle("danger", direct);
-    const action = direct ? "チャンネルを退出" : "チャンネルに参加";
+    const action = "チャンネルに参加";
     button.textContent = action;
     button.setAttribute("aria-label", action);
     button.title = action;
     button.disabled = !channel || S.channelActionBusy;
+    const menuButton = $("channelMenuButton"), leave = $("leaveChannel");
+    if (menuButton) menuButton.disabled = !channel || S.channelActionBusy;
+    if (leave) leave.disabled = !channel || S.channelActionBusy;
 }
 async function api(path, o = {}) {
     let method = o.method || "GET",
@@ -1129,6 +1131,8 @@ $("join").onclick = async () => {
     }
 };
 
+$("leaveChannel").onclick = () => $("join").onclick();
+
 // Notification center and self-service password change.
 S.localNotifications = [];
 S.mentions = [];
@@ -1838,7 +1842,11 @@ function filterChannelList() {
             empty.className = "channel-list-empty";
             host.append(empty);
         }
-        empty.textContent = searching ? "一致するチャンネルはありません" : "チャンネルはありません";
+        empty.textContent = searching
+            ? "一致するチャンネルはありません。別のキーワードをお試しください"
+            : type === "public"
+                ? "公開チャンネルはまだありません。管理者に作成を依頼してください"
+                : "参加中の非公開チャンネルはありません。招待されるとここに表示されます";
         empty.classList.toggle("hidden", visible > 0);
         if (searching || wasSearching)
             setChannelSectionCollapsed(type, searching ? false : readUIPreference(`${type}-channels-collapsed`), false);

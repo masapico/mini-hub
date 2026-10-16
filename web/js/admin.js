@@ -199,6 +199,7 @@ function clearSelectedChannel() {
     $("messages").innerHTML = '<div class="muted">メッセージはここに表示されます</div>';
     $("input").disabled = $("send").disabled = true;
     $("join").classList.add("hidden");
+    $("channelMenu").classList.add("hidden");
     $("manageCurrentChannel").classList.add("hidden");
 }
 
