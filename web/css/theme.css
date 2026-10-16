@@ -13,4 +13,9 @@
     --ui-mention-line: #b45309;
     --ui-radius-control: 6px;
     --ui-radius-panel: 8px;
+    /* Type scale: nothing smaller than --fs-xs (12px). */
+    --fs-xs: 12px;
+    --fs-sm: 13px;
+    --fs-md: 14px;
+    --fs-lg: 16px;
 }

@@ -1111,6 +1111,7 @@ $("join").onclick = async () => {
     const channelID = S.channel?.id;
     if (!channelID || S.channelActionBusy) return;
     const action = directMember(S.channel) ? "leave" : "join";
+    if (action === "leave" && !confirm(`「${S.channel.name || S.channel.id}」から退出しますか？ 退出後も公開チャンネルなので、いつでも再参加できます。`)) return;
     S.channelActionBusy = true;
     renderChannelAction();
     try {
@@ -2763,19 +2764,28 @@ render = function () {
         );
         boundary = true;
     }
+    let prevMsg = null, newDay = false, boundaryJustAdded = false;
+    const dayKey = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    const dayLabel = (d) => {
+        const now = new Date(), yesterday = new Date(now);
+        yesterday.setDate(now.getDate() - 1);
+        const weekday = d.toLocaleDateString("ja-JP", { weekday: "short" });
+        const base = d.toLocaleDateString("ja-JP", d.getFullYear() === now.getFullYear()
+            ? { month: "long", day: "numeric" }
+            : { year: "numeric", month: "long", day: "numeric" });
+        const rel = dayKey(d) === dayKey(now) ? "今日 · " : dayKey(d) === dayKey(yesterday) ? "昨日 · " : "";
+        return `${rel}${base}（${weekday}）`;
+    };
     for (const m of S.msgs) {
         const date = new Date(m.ts),
-            label = date.toLocaleDateString("ja-JP", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-            });
+            label = dayKey(date);
         if (label !== day) {
             const sep = document.createElement("div");
             sep.className = "date-sep";
-            sep.textContent = label;
+            sep.textContent = dayLabel(date);
             host.append(sep);
             day = label;
+            newDay = true;
         }
         if (joined && !boundary && readStatus.unreadCount > 0 && m.seq > lastRead && m.userId !== S.me.id) {
             const count = readStatus.unreadCount;
@@ -2783,10 +2793,24 @@ render = function () {
                 createUnreadLine(`ここから未読 ${count}件`, count),
             );
             boundary = true;
+            boundaryJustAdded = true;
         }
         const article = document.createElement("article");
+        const continued =
+            !!prevMsg &&
+            !newDay &&
+            !boundaryJustAdded &&
+            !prevMsg.withdrawnAt &&
+            !m.withdrawnAt &&
+            !prevMsg.pollRef && !prevMsg.scheduleRef && !m.pollRef && !m.scheduleRef &&
+            prevMsg.userId === m.userId &&
+            (prevMsg.ai?.id || "") === (m.ai?.id || "") &&
+            date - new Date(prevMsg.ts) < 5 * 60 * 1000;
+        prevMsg = m;
+        newDay = false;
+        boundaryJustAdded = false;
         article.className =
-            "message" +
+            "message" + (continued ? " continued" : "") +
 			(m.withdrawnAt ? " withdrawn" : "") +
             (m.userId === S.me.id ? " mine" : "") +
             (mentionsMe(m.text, m.ai) ? " mentioned" : "") +

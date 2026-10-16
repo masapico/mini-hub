@@ -124,6 +124,7 @@ function replyButton(message) {
     button.dataset.threadRoot = String(message.seq);
     const channel = S.channel.id, summary = T.summaries.get(threadKey(channel, message.seq));
     button.textContent = replyLabel(summary);
+    button.classList.toggle("has-replies", !!summary?.replyCount);
     button.classList.toggle("has-updates", !!summary?.unreadCount);
     button.onclick = () => openThread(channel, message.seq).catch(error=>note(error.message,true));
     return button;
@@ -132,6 +133,7 @@ function updateReplyButtons() {
     document.querySelectorAll("#messages [data-thread-root]").forEach((button) => {
         const summary = T.summaries.get(threadKey(S.channel?.id, button.dataset.threadRoot));
         button.textContent = replyLabel(summary);
+        button.classList.toggle("has-replies", !!summary?.replyCount);
         button.classList.toggle("has-updates", !!summary?.unreadCount);
     });
 }

@@ -52,7 +52,7 @@
         if (!key) return;
         try {
             // Keep up to 30 latest messages to prevent storage explosion
-            const trimmed = msgs.slice(-30);
+            const trimmed = msgs.filter(m => !m.error).slice(-30);
             localStorage.setItem(key, JSON.stringify(trimmed));
         } catch {
             // ignore storage quota errors
@@ -83,6 +83,9 @@
         const statusEl = $("aiCanvasQuotaStatus");
         if (statusEl) {
             statusEl.textContent = formatQuota(State.quota);
+            const q = State.quota;
+            const low = !!q && q.dailyQuota > 0 && (q.dailyQuota - q.dailyUsed) / q.dailyQuota <= 0.2;
+            statusEl.classList.toggle("quota-low", low);
         }
     }
 
@@ -277,7 +280,30 @@
         }
         wrap.append(body);
 
-        if (isAssistant) {
+        if (isAssistant && msg.error) {
+            wrap.classList.add("error");
+            if (!msg.retryQuota && msg.retryText) {
+                const actions = document.createElement("div");
+                actions.className = "ai-canvas-msg-actions";
+                const retryBtn = document.createElement("button");
+                retryBtn.type = "button";
+                retryBtn.className = "ai-canvas-action-btn";
+                retryBtn.title = "同じ内容でもう一度送信";
+                retryBtn.append(window.svgIcon("arrow-clockwise"), document.createTextNode(" 再試行"));
+                retryBtn.onclick = () => {
+                    const idx = State.messages.indexOf(msg);
+                    if (idx < 0) return;
+                    const removeFrom = idx > 0 && State.messages[idx - 1].role === "user" ? idx - 1 : idx;
+                    State.messages.splice(removeFrom, idx - removeFrom + 1);
+                    const input = $("aiCanvasInput");
+                    if (!input) return;
+                    input.innerText = msg.retryText;
+                    handleSend();
+                };
+                actions.append(retryBtn);
+                wrap.append(actions);
+            }
+        } else if (isAssistant) {
             const actions = document.createElement("div");
             actions.className = "ai-canvas-msg-actions";
 
@@ -472,7 +498,7 @@
 
         try {
             // Prepare messages payload for sliding window
-            const payloadMessages = State.messages.map(m => ({
+            const payloadMessages = State.messages.filter(m => !m.error).map(m => ({
                 role: m.role,
                 content: m.content,
             }));
@@ -514,6 +540,9 @@
                 accountId: accountID,
                 accountName: "システム",
                 ts: new Date().toISOString(),
+                error: true,
+                retryText: text,
+                retryQuota: isQuota,
             });
             renderAllMessages();
         } finally {
