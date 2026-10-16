@@ -921,18 +921,25 @@ body {
     gap: 8px;
     padding: 12px;
 }
+.profile-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
 .app .profile-main .iconbtn {
-    width: 32px;
-    height: 32px;
-    flex: 0 0 32px;
+    width: 30px;
+    height: 30px;
+    flex: 0 0 30px;
     display: grid;
     place-items: center;
     color: #64748b;
     background: #fff;
+    border-radius: 6px;
 }
 .profile-main .iconbtn svg {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
 }
 .profile-copy {
     min-width: 0;
@@ -942,6 +949,9 @@ body {
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.connection-status {
     white-space: nowrap;
 }
 .connection-status::before {
@@ -961,14 +971,24 @@ body {
 .profile-status-line {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 0;
     font-size: 0.8125rem;
     line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.status-divider {
+    color: #cbd5e1;
+    margin: 0 5px;
+    font-weight: 300;
+    font-size: 0.75rem;
+    user-select: none;
 }
 .online-users-badge {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
+    white-space: nowrap;
     font-size: 0.75rem;
     color: var(--muted, #64748b);
 }
