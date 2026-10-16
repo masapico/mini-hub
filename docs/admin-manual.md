@@ -38,26 +38,7 @@ cp minihub.sample.json minihub.json
 chmod 600 minihub.json
 ```
 
-`initialAdmin.password` を8文字以上・UTF-8で72バイト以下に変更して初回起動します。管理者作成後は `initialAdmin` ブロックを `minihub.json` から削除してください。設定ファイルがない場合は、従来どおり次の環境変数でも初期化できます。
-
-初回起動では、管理者 `admin` を自動作成します。パスワードをシェル履歴へ残さないよう、次のように入力して起動してください（8文字以上、UTF-8で72バイト以下）。
-
-```bash
-printf 'admin のパスワード: '
-read -r -s MINIHUB_ADMIN_PASSWORD
-export MINIHUB_ADMIN_PASSWORD
-echo
-./minihub -addr 127.0.0.1:8080 -data ./data
-unset MINIHUB_ADMIN_PASSWORD
-```
-
-環境変数方式では次の初期ユーザーを作成します。設定ファイル方式では `initialAdmin.id` と `name` を使用します。パスワードはユーザーJSONへ平文では保存されません。
-
-| ユーザーID | 表示名 | ロール |
-|---|---|---|
-| `admin` | 管理者 | 管理者 |
-
-この自動作成はデータディレクトリにユーザーが一人もいない場合だけ実行されます。2回目以降の起動では `MINIHUB_ADMIN_PASSWORD` は不要で、既存ユーザーのパスワードも変更されません。
+`initialAdmin.password` を8文字以上・UTF-8で72バイト以下に変更して初回起動します。管理者作成後は `initialAdmin` ブロックを `minihub.json` から削除してください。
 
 ## 起動オプション・表示設定
 
@@ -79,11 +60,7 @@ go run ./cmd/minihub -config minihub.json
 
 接続数の推移記録は `server.dataDir/connection_counts.log` に JSON Lines 形式で定期追記します（デフォルト10分間隔）。`logging.connectionCounts.enabled` および `logging.connectionCounts.interval`（例: `"10m"`）で記録の有無や間隔を設定できます。また、Web画面上（左サイドバーのステータス付近）には現在チャットに接続中のユーザー数がリアルタイムに表示されます。
 
-`-config` を省略した場合は、カレントディレクトリの `minihub.json` があれば自動的に読み込みます。明示した設定ファイルがない場合や、読み込んだ設定が不正な場合はエラーになります。初期管理者の環境変数は `MINIHUB_ADMIN_PASSWORD` を使用します。設定ファイルがない場合は、次のように待受アドレスとデータディレクトリをCLIフラグで指定できます。
-
-```bash
-./minihub -addr 127.0.0.1:8080 -data ./data
-```
+`-config` を省略した場合は、カレントディレクトリの `minihub.json` があれば自動的に読み込みます。明示した設定ファイルがない場合や、読み込んだ設定が不正な場合はエラーになります。
 
 閉域内の他のパソコンから接続させる場合は、すべてのIPv4ネットワークインターフェースで待ち受ける`0.0.0.0:8080`を指定します。起動中の場合は一度停止してから実行してください。
 
@@ -97,14 +74,15 @@ go run ./cmd/minihub -config minihub.json
 ./minihub -config minihub.json -addr 0.0.0.0:8080
 ```
 
-設定ファイルの`server.listenAddress`を`"0.0.0.0:8080"`へ変更する方法もあります。明示した`-addr`は設定ファイルの値より優先されます。ファイアウォールでは必要な閉域内の接続元からTCP 8080へのアクセスを許可します。他のパソコンからは、サーバー機のIPアドレスが`192.168.1.10`の場合、`http://192.168.1.10:8080/login`を開きます。
+設定ファイルの`server.listenAddress`を`"0.0.0.0:8080"`と設定する方法がおすすめです。
+コマンドで明示した`-addr`は設定ファイルの値より優先されます。ファイアウォールでは必要な閉域内の接続元からTCP 8080へのアクセスを許可します。他のパソコンからは、サーバー機のIPアドレスが`192.168.1.10`の場合、`http://192.168.1.10:8080/login`を開きます。
 
 画面に表示するワークスペース名とログインフォームの案内文は、`minihub.json` の `ui` で設定できます。`workspaceTitle` は通常画面左上、ログイン画面のブランド名、ブラウザタイトルに反映されます。設定変更後はサービスを再起動してください。
 
 ```json
 "ui": {
-  "workspaceTitle": "社内チャット",
-  "loginMessage": "会社のアカウントでログインしてください。"
+  "workspaceTitle": "xxチャット",
+  "loginMessage": "社員idでログインしてください。"
 }
 ```
 
