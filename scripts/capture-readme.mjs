@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
+import http from 'node:http';
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
@@ -17,6 +18,7 @@ const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'minihub-readme-'));
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const children = [];
 let socket;
+let aiServer;
 const pending = new Map();
 function start(command, args, options = {}) {
     const child = spawn(command, args, {stdio: ['ignore', 'ignore', 'pipe'], ...options});
@@ -36,6 +38,27 @@ async function stop(child) {
 }
 
 try {
+    aiServer = http.createServer(async (req, res) => {
+        let body = '';
+        for await (const chunk of req) body += chunk;
+        let reply = '確認しました。新しい受付フローの改善案について、入力項目の絞り込みと一次受付通知の自動化を進めましょう。';
+        try {
+            const parsed = JSON.parse(body);
+            const msgs = parsed.messages || [];
+            const last = msgs[msgs.length - 1];
+            const content = typeof last?.content === 'string' ? last.content : JSON.stringify(last?.content || '');
+            if (content.includes('表形式') || content.includes('整理') || content.includes('キャンバス')) {
+                reply = '### 受付フロー改善案の要約\n\nご提示いただいた改善案の要点を整理しました。\n\n| 項目 | 現行フロー | 改善案 |\n| --- | --- | --- |\n| 入力項目 | 12項目（手動入力） | 5項目（必須のみ厳選） |\n| 一次対応 | 担当者へ個別連絡 | チャンネルへ自動通知 |\n| 平均処理時間 | 約15分 | 約5分（約65%削減） |\n\nチーム内で共有して試行を進めてください。';
+            } else if (content.includes('要約') || content.includes('ポイント')) {
+                reply = '新しい受付フローの改善案を確認しました。主な要点は以下の3点です：\n\n1. **入力項目の厳選**: 必須項目を絞り込み、入力負担を大幅に削減します。\n2. **通知の自動化**: 受付内容をチャンネルへ即時連携し、対応の重複を防ぎます。\n3. **チーム先行試行**: まずは営業チームで試行し、気づいた点をフィードバックします。';
+            }
+        } catch {}
+        res.writeHead(200, {'Content-Type': 'application/json'});
+        res.end(JSON.stringify({choices: [{message: {role: 'assistant', content: reply}}]}));
+    });
+    await new Promise(resolve => aiServer.listen(0, '127.0.0.1', resolve));
+    const aiPort = aiServer.address().port;
+
     const reservation = net.createServer();
     await new Promise((resolve, reject) => {
         reservation.once('error', reject);
@@ -77,6 +100,10 @@ try {
         return text ? JSON.parse(text) : null;
     }
     const admin = await login('admin');
+    await api(admin, '/api/admin/ai-accounts', 'POST', {
+        id: 'assistant', name: '社内アシスタント', enabled: true,
+        url: `http://127.0.0.1:${aiPort}/v1/chat/completions`, model: 'local-model',
+    });
     await api(admin, '/api/users', 'POST', {users: [
         {id: 'sato', name: '佐藤 花子', password, role: 'user'},
         {id: 'suzuki', name: '鈴木 太郎', password, role: 'user'},
@@ -97,6 +124,18 @@ try {
         [users[0], '確認しました。来週から試行できるように準備します。'],
         [users[2], 'ありがとうございます。試行後に改善点をまとめましょう。'],
     ]) await api(user, `/api/channels/project/threads/${topic.seq}/messages`, 'POST', {text});
+    
+    // AI thread
+    const aiTopic = await post(users[0], '受付フローの改善案について、AIアシスタントに要点をまとめてもらいました。');
+    await api(users[0], `/api/channels/project/threads/${aiTopic.seq}/messages`, 'POST', {
+        text: '@ai:assistant（社内アシスタント） 新しい受付フローの改善案を3点に要約してください。'
+    });
+    for (let i = 0; i < 50; i++) {
+        const page = await api(users[0], `/api/channels/project/threads/${aiTopic.seq}/messages`);
+        if (page?.messages?.some(m => m.ai)) break;
+        await pause(100);
+    }
+
     await post(users[0], '打ち合わせの日程と、次に取り組むテーマも相談しましょう。');
     const pollDetail = await api(users[2], '/api/polls', 'POST', {
         requestId: 'readme-demo-poll', channelId: 'project', question: '次に改善したい業務は？',
@@ -203,13 +242,60 @@ try {
     await wait("typeof S !== 'undefined' && S.me && S.channels.length === 3");
     await run("select('project')");
     await wait("S.channel?.id === 'project' && document.querySelector('#messages .poll-card')");
+    
+    // 1. チャット画面（スレッド表示）
     await run(`openThread('project', ${topic.seq})`);
     await wait("typeof T !== 'undefined' && T.current?.messages.length === 3 && document.querySelectorAll('#threadMessages .message').length === 4");
     await capture('chat.png');
     await run('closeThread()');
+
+    // 2. AI連携画面（スレッドでのAI回答）
+    await run(`openThread('project', ${aiTopic.seq})`);
+    await wait("typeof T !== 'undefined' && T.current?.messages.some(m => m.ai) && document.querySelectorAll('#threadMessages .message').length >= 2");
+    await capture('ai.png');
+    await run('closeThread()');
+
+    // 3. アンケート画面
     await run("document.querySelector('#messages .poll-card').scrollIntoView({block:'center'})");
     await wait("document.querySelector('#messages .poll-card').textContent.includes('回答者 3人')");
     await capture('poll.png');
+
+    // 4. AIキャンバス画面
+    await run(`(() => {
+        const key = 'minihub_ai_canvas_sato';
+        const msgs = [
+            {
+                role: 'user',
+                content: '受付フロー改善のポイントを、報告用にマークダウンの表形式で整理してください。',
+                accountId: 'assistant',
+                accountName: '社内アシスタント',
+                ts: new Date().toISOString()
+            },
+            {
+                role: 'assistant',
+                content: '### 受付フロー改善案の要約\\n\\nご提示いただいた改善案の要点を整理しました。\\n\\n| 項目 | 現行フロー | 改善案 |\\n| --- | --- | --- |\\n| 入力項目 | 12項目（手動入力） | 5項目（必須のみ厳選） |\\n| 一次対応 | 担当者へ個別連絡 | チャンネルへ自動通知 |\\n| 平均処理時間 | 約15分 | 約5分（約65%削減） |\\n\\nチーム内で共有して試行を進めてください。',
+                accountId: 'assistant',
+                accountName: '社内アシスタント',
+                ts: new Date().toISOString()
+            }
+        ];
+        localStorage.setItem(key, JSON.stringify(msgs));
+        const btn = document.getElementById('aiCanvasToggle');
+        if (btn) btn.click();
+    })()`);
+    await wait("!document.getElementById('aiCanvasPanel').classList.contains('hidden') && document.querySelectorAll('#aiCanvasMessages .ai-canvas-msg').length >= 2");
+    await run(`(() => {
+        const container = document.getElementById('aiCanvasAttachedFiles');
+        if (container) {
+            container.innerHTML = '<span class="badge bg-secondary me-1 mb-1 d-inline-flex align-items-center gap-1"><svg class="bi" aria-hidden="true" style="width:14px;height:14px"><use href="/vendor/bootstrap-icons/bootstrap-icons.svg#file-earmark"></use></svg>受付フロー改善案.xlsx</span>';
+            container.classList.remove('hidden');
+        }
+    })()`);
+    await capture('ai-canvas.png');
+    images.set('canvas.png', images.get('ai-canvas.png'));
+    await run("document.getElementById('aiCanvasClose')?.click()");
+
+    // 5. 予定調整画面
     await send('Page.navigate', {url: base + '/schedules/' + schedule.id});
     await wait("document.querySelector('#results tbody')?.rows.length === 4 && document.querySelectorAll('#responseChoices input:checked').length === 3");
     await capture('schedule.png', true);
@@ -219,13 +305,18 @@ try {
     await fs.mkdir(output, {recursive: true});
     for (const [name, bytes] of images) await fs.writeFile(path.join(temp, name), bytes);
     for (const name of images.keys()) await fs.copyFile(path.join(temp, name), path.join(output, name));
-    console.log('Updated docs/images/{chat,poll,schedule}.png');
+    console.log('Updated docs/images/{chat,poll,schedule,ai,ai-canvas}.png');
 } finally {
     for (const request of pending.values()) clearTimeout(request.timer);
     socket?.close();
+    if (aiServer) {
+        try { aiServer.closeAllConnections(); } catch {}
+        try { aiServer.close(); } catch {}
+    }
     const stopped = await Promise.allSettled(children.reverse().map(stop));
     const failure = stopped.find(result => result.status === 'rejected');
     if (failure) throw failure.reason;
     // temp is an absolute directory created by mkdtemp above, never a user-supplied path.
     await fs.rm(temp, {recursive: true, force: true, maxRetries: 10, retryDelay: 200});
 }
+
