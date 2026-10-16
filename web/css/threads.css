@@ -3,16 +3,23 @@
   --thread-width: var(--thread-default-width);
 }
 .thread-panel { position:relative; min-width:0; min-height:0; display:flex; flex-direction:column; background:#fff; border-left:1px solid var(--line); grid-column:3; grid-row:1; }
+#threadPanel { border-top:3px solid #2563eb; }
+#aiCanvasPanel { border-top:3px solid #7c3aed; }
 .app.thread-open { grid-template-columns:248px minmax(280px,1fr) var(--thread-width); }
 .thread-resizer { position:absolute; left:-4px; top:0; bottom:0; width:8px; cursor:col-resize; z-index:10; user-select:none; transition:background-color .15s ease; }
 .thread-resizer:hover, .thread-resizer.is-resizing { background:var(--focus, #2563eb); opacity:.7; }
 body.thread-col-resizing { cursor:col-resize !important; user-select:none !important; }
-.thread-header { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:18px; border-bottom:1px solid var(--line); }
+.thread-header { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:16px 18px; border-bottom:1px solid var(--line); }
+.thread-panel-header { background:#f8fafc; }
+.thread-panel-header #threadTitle svg { color:#2563eb; }
+.ai-canvas-header { background:linear-gradient(to right, #f5f3ff, #faf5ff); border-bottom:1px solid #e9d5ff; }
+.ai-canvas-header #aiCanvasTitle svg { color:#7c3aed; }
+.ai-canvas-badge { background:#ede9fe; color:#6d28d9; border:1px solid #ddd6fe; font-size:11px; font-weight:600; padding:2px 7px; border-radius:999px; }
 .thread-header-actions { display:flex; align-items:center; gap:8px; }
 .thread-expand-button { display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; padding:0; border-radius:6px; color:var(--muted); border:none; background:transparent; }
 .thread-expand-button:hover { color:var(--ink); background:var(--surface-hover); }
 .thread-expand-button svg { width:16px; height:16px; }
-.thread-header h2 { font-size:18px; margin:0 0 4px; }
+.thread-header h2 { font-size:18px; margin:0 0 4px; display:inline-flex; align-items:center; }
 .thread-summary-bar { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:47px; padding:8px 16px; }
 .thread-status { min-width:0; overflow:hidden; color:var(--muted); font-size:13px; text-overflow:ellipsis; white-space:nowrap; }
 .thread-actions { display:flex; flex:none; align-items:center; gap:6px; }
@@ -29,14 +36,17 @@ body.thread-col-resizing { cursor:col-resize !important; user-select:none !impor
 .thread-tools { display:flex; align-items:center; gap:4px; min-width:0; padding:5px 6px; border-bottom:1px solid var(--line); border-radius:9px 9px 0 0; background:#f8fafc; }
 .thread-tools .fmt { width:32px; height:36px; flex:0 0 32px; }
 .thread-tools .editor-limit { margin-left:auto; overflow:hidden; text-overflow:ellipsis; font-size:10px; }
-.thread-tools #threadSend { flex:none; min-height:40px; margin-left:auto; padding:3px 8px; box-shadow:-6px 0 6px #f8fafc; }
+.thread-tools #threadSend { flex:none; min-height:40px; margin-left:auto; padding:3px 12px; box-shadow:-6px 0 6px #f8fafc; background-color:#2563eb; border-color:#2563eb; color:#fff; }
+.thread-tools #threadSend:hover { background-color:#1d4ed8; border-color:#1d4ed8; }
+.thread-tools #threadSend:active { background-color:#1e40af; border-color:#1e40af; }
 .thread-tools .editor-limit:not(:empty) + #threadSend { margin-left:0; }
 .thread-message-editor { min-height:60px; max-height:120px; padding:7px 9px; border-radius:0 0 9px 9px; font-size:14px; line-height:1.65; overflow-y:auto; }
 .thread-typing-status { min-height:22px; padding-top:3px; font-size:11px; line-height:19px; }
 .thread-input-hint { min-height:0; padding:0 2px; font-size:11px; }
 .thread-input-hint:not(:empty) { padding-top:4px; }
-.reply-button { display:inline-flex; align-items:center; flex:none; max-width:100%; height:22px; margin:0; padding:0 8px; border-radius:999px; font-size:11px; line-height:1; white-space:nowrap; }
-.reply-button.has-updates { font-weight:700; color:#1d4ed8; background:#eff6ff; }
+.reply-button { display:inline-flex; align-items:center; flex:none; max-width:100%; height:22px; margin:0; padding:0 8px; border-radius:999px; font-size:11px; line-height:1; white-space:nowrap; color:#2563eb; border:1px solid #bfdbfe; background:#eff6ff; }
+.reply-button:hover { background:#dbeafe; color:#1d4ed8; border-color:#93c5fd; }
+.reply-button.has-updates { font-weight:700; color:#1d4ed8; background:#dbeafe; border-color:#60a5fa; }
 .channel-thread-update { order:1; color:#1d4ed8; font-size:10px; font-weight:700; flex:none; }
 .thread-unread-line { border-top:1px solid #2563eb; color:#1d4ed8; font-size:12px; padding-top:5px; margin:12px 0; }
 #threadBadge:not(:empty) { background:#1d4ed8; color:white; border-radius:10px; padding:1px 5px; font-size:11px; }

@@ -758,19 +758,15 @@ function renderMessageText(message) {
     return renderMessageMarkdown(messageDisplayText(message));
 }
 
-function escapeMarkupText(text) {
-    return text.replace(/([\\*_[\]~`])/g, "\\$1");
-}
-
 function serializeEditorNode(node) {
-    if (node.nodeType === Node.TEXT_NODE) return escapeMarkupText(node.nodeValue || "");
+    if (node.nodeType === Node.TEXT_NODE) return node.nodeValue || "";
     if (node.nodeType !== Node.ELEMENT_NODE) return "";
     if (node.dataset?.mentionToken) return node.dataset.mentionToken;
     const children = serializeEditorChildren(node);
     switch (node.tagName) {
     case "BR": return "\n";
     case "B": case "STRONG": return `**${children}**`;
-    case "U": return `__${children}__`;
+    case "U": return children;
     case "S": case "STRIKE": return `~~${children}~~`;
     case "A": {
         const href = safeLinkURL(node.getAttribute("href") || "");
@@ -789,7 +785,6 @@ function serializeEditorChildren(parent) {
             ["DIV", "P", "BLOCKQUOTE"].includes(node.tagName);
         if (block && value && !value.endsWith("\n")) value += "\n";
         value += serializeEditorNode(node);
-        if (block && !value.endsWith("\n")) value += "\n";
     }
     return value;
 }
@@ -1051,9 +1046,9 @@ $("input").onkeydown = (e) => {
         e.preventDefault();
         send();
     }
-    if (e.ctrlKey && ["b", "u"].includes(e.key.toLowerCase())) {
+    if (e.ctrlKey && e.key.toLowerCase() === "b") {
         e.preventDefault();
-        applyEditorFormat(e.key.toLowerCase() === "b" ? "bold" : "underline");
+        applyEditorFormat("bold");
     }
 };
 document
@@ -1282,6 +1277,9 @@ function renderNotificationCenter() {
     const notices = $("noticeList");
     if (!notices) return;
     $("clearNotifications").disabled = !S.localNotifications.length;
+    if ($("clearAllNotificationsBtn")) {
+        $("clearAllNotificationsBtn").disabled = !S.localNotifications.length && !S.mentionUnread;
+    }
     notices.replaceChildren();
     for (const item of S.localNotifications) {
         const row = document.createElement("article");
@@ -1367,6 +1365,24 @@ $("clearNotifications").onclick = () => {
     try { localStorage.removeItem(notificationStorageKey()); } catch (_) {}
     renderNotificationCenter();
 };
+if ($("clearAllNotificationsBtn")) {
+    $("clearAllNotificationsBtn").onclick = async () => {
+        if (!S.localNotifications.length && !S.mentionUnread) return;
+        if (!window.confirm("すべての通知と未読メンションをクリアしますか？")) return;
+        S.localNotifications = [];
+        try { localStorage.removeItem(notificationStorageKey()); } catch (_) {}
+        const unreadMentions = (S.mentions || []).filter((m) => !m.readAt);
+        if (unreadMentions.length) {
+            await Promise.allSettled(
+                unreadMentions.map((m) => api(`/api/mentions/${encodeURIComponent(m.message.id)}/read`, { method: "PUT" }))
+            );
+            for (const m of unreadMentions) m.readAt = new Date().toISOString();
+            S.mentionUnread = 0;
+        }
+        renderNotificationCenter();
+        note("すべての通知をクリアしました", "success", false);
+    };
+}
 $("moreMentions").onclick = () => loadMentions(true);
 $("notificationCenter").addEventListener("show.bs.offcanvas", () => {
     closeMobileChannelNav("none");
@@ -4164,26 +4180,19 @@ realtime = function () {
             );
             const posted = page.messages.find((item) => item.seq === message.seq);
             if (!posted) return;
-            const mentioned = posted.mentionUserIds?.includes(S.me.id) || mentionsMe(posted.text, posted.ai);
-            if (!selected && mentioned)
-                note(
-                    `${channel?.name || message.channelId} であなた宛てのメンションがあります`,
-                );
-            else if (!selected)
-                note(
-                    `${channel?.name || message.channelId} に新しいメッセージがあります`,
-                );
-            if (posted.userId !== S.me.id && typeof showOSNotification === "function")
-                void showOSNotification({
-                    channelId: message.channelId, channelName: channel.name,
-                    seq: posted.seq, mention: mentioned,
-                    body: mentioned ? "あなた宛てのメンションがあります" : "新しい投稿があります",
-                });
-        } catch (_) {
-            if (!selected) note(
-                `${channel?.name || message.channelId} に新しいメッセージがあります`,
-            );
-        }
+            if (mentioned) {
+                if (!selected)
+                    note(
+                        `${channel?.name || message.channelId} であなた宛てのメンションがあります`,
+                    );
+                if (posted.userId !== S.me.id && typeof showOSNotification === "function")
+                    void showOSNotification({
+                        channelId: message.channelId, channelName: channel.name,
+                        seq: posted.seq, mention: true,
+                        body: "あなた宛てのメンションがあります",
+                    });
+            }
+        } catch (_) {}
     };
     socket.onclose = () => {
         if (S.ws === socket) {

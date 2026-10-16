@@ -502,8 +502,8 @@ $("threadInput").onblur=()=>{if(S.typingScope?.threadRootSeq)stopTyping();};
 $("threadInput").onkeydown=e=>{
     if (typeof handleThreadMentionKey === "function" && handleThreadMentionKey(e)) return;
     if((e.ctrlKey||e.metaKey)&&e.key==="Enter"&&!e.isComposing){e.preventDefault();$("threadForm").requestSubmit();return;}
-    if((e.ctrlKey||e.metaKey)&&["b","u"].includes(e.key.toLowerCase())){
-        e.preventDefault();applyEditorFormat(e.key.toLowerCase()==="b"?"bold":"underline",$("threadInput"),document.querySelector(".thread-tools"),syncThreadEditorState);
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="b"){
+        e.preventDefault();applyEditorFormat("bold",$("threadInput"),document.querySelector(".thread-tools"),syncThreadEditorState);
     }
 };
 $("threadForm").onsubmit=async event=>{

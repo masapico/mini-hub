@@ -311,7 +311,6 @@ func TestApplicationIncludesRestrictedRichTextComposer(t *testing.T) {
 		`class="message-editor"`,
 		`contenteditable="false"`,
 		`data-format="bold"`,
-		`data-format="underline"`,
 		`data-format="strikeThrough"`,
 		`data-format="quote"`,
 		`id="linkButton"`,
