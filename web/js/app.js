@@ -2984,12 +2984,17 @@ setup = function (me) {
 const mentionWrap = document.createElement("span");
 mentionWrap.className = "mention-wrap";
 mentionWrap.innerHTML =
-    '<button type="button" class="fmt" id="mentionButton" title="メンションを追加" aria-label="メンションを追加">@</button><div class="mention-menu hidden" id="mentionMenu"><div class="mention-search"><input id="mentionSearch" type="search" placeholder="名前またはIDで検索" autocomplete="off" aria-label="メンション候補を検索"></div><div class="mention-options" id="mentionOptions"></div></div>';
-document.querySelector(".composer .tools .dropdown").after(mentionWrap);
+    '<button type="button" class="fmt fmt-mention" id="mentionButton" title="メンションを追加" aria-label="メンションを追加">@</button><div class="mention-menu hidden" id="mentionMenu"><div class="mention-search"><input id="mentionSearch" type="search" placeholder="名前またはIDで検索" autocomplete="off" aria-label="メンション候補を検索"></div><div class="mention-options" id="mentionOptions"></div></div>';
+const firstDivider = document.querySelector(".composer .tools .dropdown + .tool-divider");
+if (firstDivider) {
+    firstDivider.after(mentionWrap);
+} else {
+    document.querySelector(".composer .tools .dropdown")?.after(mentionWrap);
+}
 const aiButton = document.createElement("button");
 aiButton.type = "button";
 aiButton.id = "aiButton";
-aiButton.className = "fmt hidden";
+aiButton.className = "fmt fmt-ai hidden";
 aiButton.innerHTML = icon("robot");
 aiButton.title = "AIを呼び出す";
 aiButton.setAttribute("aria-label", "AIを呼び出す");

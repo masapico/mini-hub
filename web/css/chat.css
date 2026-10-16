@@ -200,6 +200,83 @@
     border-color: #64748b;
     color: #1e293b;
 }
+
+/* Toolbar layout & subtle button categorization */
+.tool-divider {
+    display: inline-block;
+    width: 1px;
+    height: 18px;
+    background: #cbd5e1;
+    margin: 0 4px;
+    flex: 0 0 1px;
+    align-self: center;
+}
+.thread-tools .tool-divider {
+    height: 16px;
+    margin: 0 2px;
+}
+.mention-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.thread-tools .mention-wrap {
+    gap: 4px;
+}
+
+/* Mention Button: subtle blue accent */
+.app .fmt.fmt-mention {
+    color: #2563eb;
+    background: #f8fafc;
+    border-color: #cbd5e1;
+}
+.app .fmt.fmt-mention:hover:not(:disabled) {
+    color: #1d4ed8;
+    background: #eff6ff;
+    border-color: #bfdbfe;
+}
+.app .fmt.fmt-mention.active,
+.app .fmt.fmt-mention[aria-expanded="true"] {
+    color: #1d4ed8;
+    background: #dbeafe;
+    border-color: #93c5fd;
+}
+
+/* AI Mention Button: subtle purple accent */
+.app .fmt.fmt-ai {
+    color: #7c3aed;
+    background: #faf5ff;
+    border-color: #cbd5e1;
+}
+.app .fmt.fmt-ai:hover:not(:disabled) {
+    color: #6d28d9;
+    background: #f3e8ff;
+    border-color: #ddd6fe;
+}
+.app .fmt.fmt-ai.active,
+.app .fmt.fmt-ai[aria-expanded="true"] {
+    color: #6d28d9;
+    background: #ede9fe;
+    border-color: #c4b5fd;
+}
+
+/* AI Attach Button: subtle purple accent when AI active */
+.app .fmt.fmt-attach {
+    color: #64748b;
+    border-color: #cbd5e1;
+}
+.app .fmt.fmt-attach:not(:disabled) {
+    color: #7c3aed;
+    background: #faf5ff;
+    border-color: #ddd6fe;
+}
+.app .fmt.fmt-attach:not(:disabled):hover {
+    color: #6d28d9;
+    background: #f3e8ff;
+    border-color: #c4b5fd;
+}
+
 .app .btn-success {
     --bs-btn-bg: #334155;
     --bs-btn-border-color: #334155;
