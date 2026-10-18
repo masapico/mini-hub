@@ -868,6 +868,59 @@ func TestMarkedVendorScriptIsServed(t *testing.T) {
 	}
 }
 
+func TestAdminMenuRequiredBadgesAndAILoadingStates(t *testing.T) {
+	handler := Handler(testAuthenticator(true))
+	page := request(t, handler, "/").Body.String()
+
+	// Verify required badges on admin menu forms
+	for _, want := range []string{
+		`id="channelForm"`,
+		`for="cname">表示名<span class="badge-required"`,
+		`for="cid">ID<span class="badge-required"`,
+		`for="managedChannelName">表示名<span class="badge-required"`,
+		`for="newid">ID<span class="badge-required"`,
+		`for="newname">表示名<span class="badge-required"`,
+		`for="newpw">初期パスワード（8文字以上）<span class="badge-required"`,
+		`for="bulktext">タブ区切り: ID ⇥ 表示名 ⇥ パスワード ⇥ 権限 ⇥ グループ<span class="badge-required"`,
+		`for="editname">表示名<span class="badge-required"`,
+		`for="gid">グループID<span class="badge-required"`,
+		`for="gname">表示名<span class="badge-required"`,
+		`for="groupName">表示名<span class="badge-required"`,
+		`for="aiID">ID<span class="badge-required" id="aiIDRequiredBadge"`,
+		`for="aiName">表示名<span class="badge-required"`,
+		`for="aiURL">エンドポイントURL<span class="badge-required"`,
+		`for="aiModel">モデル名<span class="badge-required"`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("page missing required badge pattern: %s", want)
+		}
+	}
+
+	// Verify app.css contains badge-required
+	appCSS := request(t, handler, "/css/app.css").Body.String()
+	if !strings.Contains(appCSS, ".badge-required") {
+		t.Fatal("app.css missing .badge-required class")
+	}
+
+	// Verify threads.css contains ai-thinking-indicator and ai-pending-message
+	threadsCSS := request(t, handler, "/css/threads.css").Body.String()
+	if !strings.Contains(threadsCSS, ".ai-thinking-indicator") || !strings.Contains(threadsCSS, ".ai-pending-message") {
+		t.Fatal("threads.css missing .ai-thinking-indicator or .ai-pending-message class")
+	}
+
+	// Verify ai-canvas.js contains thinking message handling
+	aiCanvasJS := request(t, handler, "/js/ai-canvas.js").Body.String()
+	if !strings.Contains(aiCanvasJS, "ai-thinking-indicator") || !strings.Contains(aiCanvasJS, "送信中…") {
+		t.Fatal("ai-canvas.js missing thinking indicator or sending state")
+	}
+
+	// Verify threads.js contains pending AI handling
+	threadsJS := request(t, handler, "/js/threads.js").Body.String()
+	if !strings.Contains(threadsJS, "getPendingAIMention") || !strings.Contains(threadsJS, "ai-pending-message") {
+		t.Fatal("threads.js missing getPendingAIMention or ai-pending-message")
+	}
+}
+
 func request(t *testing.T, handler http.Handler, path string) *httptest.ResponseRecorder {
 	t.Helper()
 	recorder := httptest.NewRecorder()

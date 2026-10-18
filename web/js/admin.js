@@ -688,6 +688,7 @@ function showAIPane(mode, account = null) {
         $("aiDetailTitle").textContent = "新規AI登録";
         $("aiDetailID").textContent = "";
         $("deleteAI").classList.add("hidden");
+        $("aiIDRequiredBadge")?.classList.remove("hidden");
         $("aiID").disabled = false;
         $("aiID").value = "";
         $("aiName").value = "";
@@ -708,6 +709,7 @@ function showAIPane(mode, account = null) {
         $("aiDetailTitle").textContent = account.name || "AI設定";
         $("aiDetailID").textContent = `ID: ${account.id}`;
         $("deleteAI").classList.remove("hidden");
+        $("aiIDRequiredBadge")?.classList.add("hidden");
         $("aiID").disabled = true;
         $("aiID").value = account.id;
         $("aiName").value = account.name || "";

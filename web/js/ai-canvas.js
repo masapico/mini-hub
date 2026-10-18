@@ -51,8 +51,8 @@
         const key = storageKey();
         if (!key) return;
         try {
-            // Keep up to 30 latest messages to prevent storage explosion
-            const trimmed = msgs.filter(m => !m.error).slice(-30);
+            // Keep up to 30 latest messages to prevent storage explosion (exclude thinking and errors)
+            const trimmed = msgs.filter(m => !m.error && !m.thinking).slice(-30);
             localStorage.setItem(key, JSON.stringify(trimmed));
         } catch {
             // ignore storage quota errors
@@ -233,8 +233,9 @@
 
     function renderMessage(msg) {
         const isAssistant = msg.role === "assistant";
+        const isThinking = !!msg.thinking;
         const wrap = document.createElement("div");
-        wrap.className = `ai-canvas-msg ${msg.role}`;
+        wrap.className = `ai-canvas-msg ${msg.role}${isThinking ? " thinking" : ""}`;
 
         const meta = document.createElement("div");
         meta.className = "ai-canvas-msg-meta";
@@ -260,6 +261,20 @@
 
         const body = document.createElement("div");
         body.className = "ai-canvas-msg-body";
+        if (isThinking) {
+            const indicator = document.createElement("div");
+            indicator.className = "ai-thinking-indicator";
+            const spinner = document.createElement("span");
+            spinner.className = "spinner-border spinner-border-sm text-primary";
+            spinner.setAttribute("role", "status");
+            spinner.setAttribute("aria-hidden", "true");
+            const textSpan = document.createElement("span");
+            textSpan.textContent = "AIが回答を生成しています…";
+            indicator.append(spinner, textSpan);
+            body.append(indicator);
+            wrap.append(body);
+            return wrap;
+        }
         if (isAssistant) {
             if (typeof window.renderMessageMarkdown === "function") {
                 body.append(window.renderMessageMarkdown(msg.content));
@@ -486,6 +501,16 @@
         // User message
         const userMsg = { role: "user", content: text, ts: new Date().toISOString() };
         State.messages.push(userMsg);
+
+        // Thinking placeholder for assistant
+        const thinkingMsg = {
+            role: "assistant",
+            thinking: true,
+            accountId: accountID,
+            accountName: accountName,
+            ts: new Date().toISOString(),
+        };
+        State.messages.push(thinkingMsg);
         renderAllMessages();
 
         // Clear input and files
@@ -494,11 +519,12 @@
 
         input.contentEditable = "false";
         sendBtn.disabled = true;
-        if (statusEl) statusEl.textContent = "AI考え中...";
+        sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>送信中…';
+        if (statusEl) statusEl.textContent = "AIが回答を生成しています…";
 
         try {
-            // Prepare messages payload for sliding window
-            const payloadMessages = State.messages.filter(m => !m.error).map(m => ({
+            // Prepare messages payload for sliding window (excluding errors and temporary thinking)
+            const payloadMessages = State.messages.filter(m => !m.error && !m.thinking).map(m => ({
                 role: m.role,
                 content: m.content,
             }));
@@ -513,13 +539,19 @@
             });
 
             const reply = res.reply || "";
-            State.messages.push({
+            const replyMsg = {
                 role: "assistant",
                 content: reply,
                 accountId: accountID,
                 accountName: accountName,
                 ts: new Date().toISOString(),
-            });
+            };
+            const thinkingIdx = State.messages.indexOf(thinkingMsg);
+            if (thinkingIdx >= 0) {
+                State.messages[thinkingIdx] = replyMsg;
+            } else {
+                State.messages.push(replyMsg);
+            }
             saveMessages(State.messages);
             renderAllMessages();
 
@@ -534,7 +566,7 @@
         } catch (err) {
             const isQuota = err.status === 429 || (err.message && err.message.includes("上限"));
             const errMsg = isQuota ? "本日のAI利用上限に達しました。明日再度お試しください。" : `AI応答エラー: ${err.message}`;
-            State.messages.push({
+            const errorMsg = {
                 role: "assistant",
                 content: `⚠️ ${errMsg}`,
                 accountId: accountID,
@@ -543,11 +575,18 @@
                 error: true,
                 retryText: text,
                 retryQuota: isQuota,
-            });
+            };
+            const thinkingIdx = State.messages.indexOf(thinkingMsg);
+            if (thinkingIdx >= 0) {
+                State.messages[thinkingIdx] = errorMsg;
+            } else {
+                State.messages.push(errorMsg);
+            }
             renderAllMessages();
         } finally {
             input.contentEditable = "true";
             sendBtn.disabled = false;
+            sendBtn.textContent = "送信";
             if (statusEl) statusEl.textContent = "";
             input.focus();
         }

@@ -128,4 +128,27 @@ body.thread-col-resizing { cursor:col-resize !important; user-select:none !impor
 .ai-canvas-composer .thread-message-editor:focus { outline: 0; }
 .ai-canvas-composer .thread-editor-box:focus-within { border-color: #7c3aed; box-shadow: 0 0 0 2px #ede9fe; }
 
+/* AI思考中・回答生成中インジケーター */
+.ai-thinking-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: var(--fs-sm);
+    padding: 4px 0;
+}
+.ai-canvas-msg.thinking {
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+}
+.ai-pending-message {
+    border-left: 3px solid #7c3aed !important;
+    background: #faf5ff !important;
+    animation: ai-pulse 2s infinite ease-in-out;
+}
+@keyframes ai-pulse {
+    0%, 100% { opacity: 0.85; }
+    50% { opacity: 1; }
+}
+
 /* Type scale: map the fixed sizes onto the shared variables. */

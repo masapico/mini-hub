@@ -145,7 +145,13 @@ function updateThreadControls() {
         const hasAI = textHasAIMention(text);
         const hasAttachments = (T.stagedAttachments || []).length > 0;
         const attachWithoutAI = hasAttachments && !hasAI;
-        $("threadSend").disabled = !canPost || T.current.sending || T.current.loading || attachWithoutAI;
+        const sendBtn = $("threadSend");
+        if (T.current.sending) {
+            sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>送信中…';
+        } else {
+            sendBtn.textContent = "送信";
+        }
+        sendBtn.disabled = !canPost || T.current.sending || T.current.loading || attachWithoutAI;
         $("threadInput").disabled = !canPost || T.current.loading || T.current.sending;
         $("threadMentionButton").disabled = $("threadInput").disabled;
         $("threadAIButton").disabled = $("threadInput").disabled;
@@ -274,6 +280,40 @@ async function syncThreadReactions(t, messages = t.messages) {
     for (const seq of seqs) S.reactions.delete(seq);
     for (const view of views) applyReactionView(view);
 }
+function getPendingAIMention(t) {
+    if (!t) return null;
+    if (t.pendingAI) {
+        const hasReply = t.messages.some(m => m.ai && (m.ai.id === t.pendingAI.aiId || m.seq > t.pendingAI.triggerSeq));
+        const isExpired = Date.now() - t.pendingAI.startTime > 120000;
+        if (hasReply || isExpired) {
+            t.pendingAI = null;
+        } else {
+            return t.pendingAI;
+        }
+    }
+    const trigger = t.messages.length ? t.messages.at(-1) : t.parent;
+    if (trigger && !trigger.withdrawnAt && textHasAIMention(trigger.text)) {
+        const hasReply = t.messages.some(m => m.ai && m.seq > trigger.seq);
+        const msgAge = Date.now() - new Date(trigger.ts).getTime();
+        if (!hasReply && msgAge >= 0 && msgAge < 120000) {
+            const aiMatch = trigger.text.match(/(?:^|\s)@ai:([A-Za-z0-9_-]+)/);
+            if (aiMatch) {
+                const aiId = aiMatch[1];
+                const account = (S.aiAccounts || []).find(a => a.id === aiId);
+                const aiName = account?.name || aiId;
+                t.pendingAI = {
+                    aiId,
+                    aiName,
+                    triggerSeq: trigger.seq,
+                    triggerId: trigger.id,
+                    startTime: new Date(trigger.ts).getTime(),
+                };
+                return t.pendingAI;
+            }
+        }
+    }
+    return null;
+}
 function renderThread(t, focusSeq = null, keepScroll = true) {
     if (T.current !== t) return;
     const scroll = $("threadMessages"), previous = scroll.scrollTop;
@@ -289,7 +329,14 @@ function renderThread(t, focusSeq = null, keepScroll = true) {
         }
         $("threadReplies").append(threadMessage(m));
     }
-    if (!t.messages.length) $("threadReplies").textContent="返信はまだありません";
+    const pendingAI = getPendingAIMention(t);
+    if (!t.messages.length && !pendingAI) $("threadReplies").textContent="返信はまだありません";
+    if (pendingAI) {
+        const pendingCard = document.createElement("article");
+        pendingCard.className = "message ai-pending-message";
+        pendingCard.innerHTML = `<div class="head"><span>🤖 ${pendingAI.aiName}</span> · <em class="text-muted">回答を生成中…</em></div><div class="text"><div class="ai-thinking-indicator"><span class="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></span><span>AIが返信を作成しています…</span></div></div>`;
+        $("threadReplies").append(pendingCard);
+    }
     $("threadOlder").classList.toggle("hidden", !t.before);
     $("threadNewer").classList.toggle("hidden", !t.after && !t.pending);
     $("threadNewer").textContent = t.pending ? "新しい返信を読む" : "続きの返信を読む";
@@ -518,12 +565,30 @@ $("threadForm").onsubmit=async event=>{
         note("添付ファイルはAI宛てメッセージ（@ai:...）にのみ送信できます", true);
         return;
     }
+    const aiMatch = text.match(/(?:^|\s)@ai:([A-Za-z0-9_-]+)/);
     if (S.typingScope?.channelID===t.channel && S.typingScope?.threadRootSeq===t.root) stopTyping();
     t.sending=true;updateThreadControls();
     try{
         await api(`${threadURL(t)}/messages`,{method:"POST",body:JSON.stringify({text, attachmentIds})});
         if(T.drafts.get(threadKey(t.channel,t.root))?.trim()===text)T.drafts.delete(threadKey(t.channel,t.root));
-        if(T.current===t){T.stagedAttachments=[];renderThreadStagedAttachments();$("threadInput").value="";syncThreadEditorState();await loadThreadPage(t,`after=${t.messages.at(-1)?.seq||0}`,"newer");}
+        if(T.current===t){
+            T.stagedAttachments=[];
+            renderThreadStagedAttachments();
+            $("threadInput").value="";
+            syncThreadEditorState();
+            if (aiMatch) {
+                const aiId = aiMatch[1];
+                const account = (S.aiAccounts || []).find(a => a.id === aiId);
+                const aiName = account?.name || aiId;
+                t.pendingAI = {
+                    aiId,
+                    aiName,
+                    triggerSeq: t.messages.at(-1)?.seq || 0,
+                    startTime: Date.now(),
+                };
+            }
+            await loadThreadPage(t,`after=${t.messages.at(-1)?.seq||0}`,"newer");
+        }
         scheduleThreadSync();
     }catch(error){if(T.current===t)$("threadStatus").textContent=`送信できません: ${error.message}`;}
     finally{t.sending=false;if(T.current===t){updateThreadControls();$("threadInput").focus();updateOwnTyping();}}

@@ -699,6 +699,18 @@ select {
 .hidden {
     display: none !important;
 }
+.badge-required {
+    display: inline-block;
+    font-size: var(--fs-xs, 12px);
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background-color: #dc2626;
+    color: #ffffff;
+    line-height: 1.35;
+    vertical-align: middle;
+    margin-left: 6px;
+}
 .field {
     display: grid;
     gap: 5px;
