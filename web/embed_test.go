@@ -908,10 +908,13 @@ func TestAdminMenuRequiredBadgesAndAILoadingStates(t *testing.T) {
 		t.Fatal("threads.css missing .ai-thinking-indicator or .ai-pending-message class")
 	}
 
-	// Verify ai-canvas.js contains thinking message handling
+	// Verify ai-canvas.js contains thinking message handling and reset toast without storing in notifications
 	aiCanvasJS := request(t, handler, "/js/ai-canvas.js").Body.String()
 	if !strings.Contains(aiCanvasJS, "ai-thinking-indicator") || !strings.Contains(aiCanvasJS, "送信中…") {
 		t.Fatal("ai-canvas.js missing thinking indicator or sending state")
+	}
+	if !strings.Contains(aiCanvasJS, `"会話履歴をリセットしました", false, false`) {
+		t.Fatal("ai-canvas.js reset notification must not be stored in notification center")
 	}
 
 	// Verify threads.js contains pending AI handling

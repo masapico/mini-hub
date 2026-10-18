@@ -729,7 +729,7 @@
                     State.messages = [];
                     saveMessages([]);
                     renderAllMessages();
-                    window.note?.("会話履歴をリセットしました");
+                    window.note?.("会話履歴をリセットしました", false, false);
                 }
             };
         }
