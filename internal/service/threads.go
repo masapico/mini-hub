@@ -73,6 +73,9 @@ func (s *Service) PostThreadMessage(ctx context.Context, userID, channelID strin
 	if strings.TrimSpace(text) == "" || len([]byte(text)) > MaxMessageBytes {
 		return domain.Message{}, fmt.Errorf("%w: メッセージは空にせず、%dバイト以内にしてください", ErrInvalid, MaxMessageBytes)
 	}
+	if countAIMentions(text) > 1 {
+		return domain.Message{}, fmt.Errorf("%w: AIへのメンションは1メッセージにつき1件のみ指定できます", ErrInvalid)
+	}
 	var attachments []domain.Attachment
 	if len(attachmentIDs) > 0 {
 		if !hasAIMention(text) {

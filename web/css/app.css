@@ -618,6 +618,7 @@ select {
 }
 .editor-limit {
     margin-left: auto;
+    padding: 0 8px;
     white-space: nowrap;
     color: #a13b3b;
     font-size: var(--fs-xs);

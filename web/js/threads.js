@@ -36,22 +36,48 @@ function renderThreadStagedAttachments() {
 function syncThreadEditorState() {
     updateThreadEditorAppearance();
     const text = $("threadInput").value;
-    const hasAI = textHasAIMention(text);
+    const aiCount = countAIMentions(text);
+    const hasAI = aiCount > 0;
+    const multiAI = aiCount > 1;
     const hasAttachments = (T.stagedAttachments || []).length > 0;
     const canPost = S.channel?.id === T.current?.channel && member(S.channel) && !S.channel.archivedAt && !T.current?.parent?.withdrawnAt;
+    const attachWithoutAI = hasAttachments && !hasAI;
+
+    const limitEl = $("threadEditorLimit");
+    if (limitEl) {
+        const bytes = new TextEncoder().encode(text).length;
+        if (bytes > MAX_MESSAGE_BYTES) {
+            limitEl.textContent = `${bytes.toLocaleString()} / ${MAX_MESSAGE_BYTES.toLocaleString()} bytes`;
+            limitEl.title = "";
+        } else if (multiAI) {
+            limitEl.textContent = "AIへのメンションは1件まで";
+            limitEl.title = "AIへのメンションは1メッセージにつき1件のみ指定できます";
+        } else if (attachWithoutAI) {
+            limitEl.textContent = "添付はAI宛てのみ可能";
+            limitEl.title = "添付ファイルはAI宛てメッセージ（@ai:...）にのみ送信できます";
+        } else {
+            limitEl.textContent = "";
+            limitEl.title = "";
+        }
+    }
+
     const attachBtn = $("threadAttachButton");
     if (attachBtn) {
-        attachBtn.disabled = !canPost || $("threadInput").disabled || !hasAI;
-        attachBtn.title = hasAI ? "ファイルを添付" : "ファイルを添付 (@ai:メンション時のみ有効)";
+        attachBtn.disabled = !canPost || $("threadInput").disabled || !hasAI || multiAI;
+        attachBtn.title = multiAI ? "AIへのメンションは1メッセージにつき1件のみ指定できます" : hasAI ? "ファイルを添付" : "ファイルを添付 (@ai:メンション時のみ有効)";
     }
-    const attachWithoutAI = hasAttachments && !hasAI;
-    if (attachWithoutAI) {
-        $("threadInputHint").textContent = "添付ファイルはAI宛てメッセージ（@ai:...）にのみ送信できます";
-        $("threadSend").disabled = true;
-    } else if (canPost) {
-        $("threadInputHint").textContent = "";
-        $("threadSend").disabled = !canPost || T.current?.sending || T.current?.loading;
+
+    const sendBtn = $("threadSend");
+    sendBtn.disabled = !canPost || T.current?.sending || T.current?.loading || attachWithoutAI || multiAI;
+    if (multiAI) {
+        sendBtn.title = "AIへのメンションは1メッセージにつき1件のみ指定できます";
+    } else if (attachWithoutAI) {
+        sendBtn.title = "添付ファイルはAI宛てメッセージ（@ai:...）にのみ送信できます";
+    } else {
+        sendBtn.title = "返信を送信（Ctrl+Enter）";
     }
+
+    $("threadInputHint").textContent = canPost ? "" : "返信するにはチャンネルへ参加してください";
 }
 updateThreadEditorAppearance = installRichEditor($("threadInput"), {
     toolbar: document.querySelector(".thread-tools"),
@@ -142,32 +168,57 @@ function updateThreadControls() {
     if (T.current) {
         const canPost = S.channel?.id === T.current.channel && member(S.channel) && !S.channel.archivedAt && !T.current.parent?.withdrawnAt;
         const text = $("threadInput").value;
-        const hasAI = textHasAIMention(text);
+        const aiCount = countAIMentions(text);
+        const hasAI = aiCount > 0;
+        const multiAI = aiCount > 1;
         const hasAttachments = (T.stagedAttachments || []).length > 0;
         const attachWithoutAI = hasAttachments && !hasAI;
+
+        const limitEl = $("threadEditorLimit");
+        if (limitEl) {
+            const bytes = new TextEncoder().encode(text).length;
+            if (bytes > MAX_MESSAGE_BYTES) {
+                limitEl.textContent = `${bytes.toLocaleString()} / ${MAX_MESSAGE_BYTES.toLocaleString()} bytes`;
+                limitEl.title = "";
+            } else if (multiAI) {
+                limitEl.textContent = "AIへのメンションは1件まで";
+                limitEl.title = "AIへのメンションは1メッセージにつき1件のみ指定できます";
+            } else if (attachWithoutAI) {
+                limitEl.textContent = "添付はAI宛てのみ可能";
+                limitEl.title = "添付ファイルはAI宛てメッセージ（@ai:...）にのみ送信できます";
+            } else {
+                limitEl.textContent = "";
+                limitEl.title = "";
+            }
+        }
+
         const sendBtn = $("threadSend");
         if (T.current.sending) {
             sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>送信中…';
         } else {
             sendBtn.textContent = "送信";
         }
-        sendBtn.disabled = !canPost || T.current.sending || T.current.loading || attachWithoutAI;
+        sendBtn.disabled = !canPost || T.current.sending || T.current.loading || attachWithoutAI || multiAI;
+        if (multiAI) {
+            sendBtn.title = "AIへのメンションは1メッセージにつき1件のみ指定できます";
+        } else if (attachWithoutAI) {
+            sendBtn.title = "添付ファイルはAI宛てメッセージ（@ai:...）にのみ送信できます";
+        } else {
+            sendBtn.title = "返信を送信（Ctrl+Enter）";
+        }
+
         $("threadInput").disabled = !canPost || T.current.loading || T.current.sending;
         $("threadMentionButton").disabled = $("threadInput").disabled;
         $("threadAIButton").disabled = $("threadInput").disabled;
         const attachBtn = $("threadAttachButton");
         if (attachBtn) {
-            attachBtn.disabled = $("threadInput").disabled || !hasAI;
-            attachBtn.title = hasAI ? "ファイルを添付" : "ファイルを添付 (@ai:メンション時のみ有効)";
+            attachBtn.disabled = $("threadInput").disabled || !hasAI || multiAI;
+            attachBtn.title = multiAI ? "AIへのメンションは1メッセージにつき1件のみ指定できます" : hasAI ? "ファイルを添付" : "ファイルを添付 (@ai:メンション時のみ有効)";
         }
         if (!canPost || T.current.sending) {
             if (typeof closeThreadMention === "function") closeThreadMention();
         }
-        if (attachWithoutAI) {
-            $("threadInputHint").textContent = "添付ファイルはAI宛てメッセージ（@ai:...）にのみ送信できます";
-        } else {
-            $("threadInputHint").textContent = canPost ? "" : "返信するにはチャンネルへ参加してください";
-        }
+        $("threadInputHint").textContent = canPost ? "" : "返信するにはチャンネルへ参加してください";
     }
 }
 function threadChannelChanging(id) {
@@ -559,7 +610,11 @@ $("threadForm").onsubmit=async event=>{
     event.preventDefault();const t=T.current,text=$("threadInput").value.trim();
     if(!t||t.sending||t.loading||!text)return;
     if (typeof threadMentionBlocksSubmit === "function" && threadMentionBlocksSubmit()) return;
-    if(new TextEncoder().encode(text).length>MAX_MESSAGE_BYTES){note("メッセージは16 KiB以内にしてください",true);return;}
+    if (new TextEncoder().encode(text).length > MAX_MESSAGE_BYTES) { note("メッセージは16 KiB以内にしてください", true); return; }
+    if (countAIMentions(text) > 1) {
+        note("AIへのメンションは1メッセージにつき1件のみ指定できます", true);
+        return;
+    }
     const attachmentIds = (T.stagedAttachments || []).map((a) => a.id);
     if (attachmentIds.length && !textHasAIMention(text)) {
         note("添付ファイルはAI宛てメッセージ（@ai:...）にのみ送信できます", true);

@@ -397,3 +397,31 @@ func TestDirectAICallQuotaAndUsage(t *testing.T) {
 	}
 }
 
+func TestMultipleAIMentionsRejected(t *testing.T) {
+	s, ctx, user, ch := setupTestService(t)
+
+	// Single AI mention is accepted
+	msg, err := s.PostMessage(ctx, user, ch, "@ai:helper こんにちは")
+	if err != nil {
+		t.Fatalf("single AI mention should succeed, got: %v", err)
+	}
+
+	// Multiple AI mentions in PostMessage must be rejected
+	_, err = s.PostMessage(ctx, user, ch, "@ai:helper @ai:secondbot こんにちは")
+	if !errors.Is(err, ErrInvalid) {
+		t.Fatalf("expected ErrInvalid for multiple AI mentions in PostMessage, got: %v", err)
+	}
+
+	// Single AI mention in PostThreadMessage is accepted
+	_, err = s.PostThreadMessage(ctx, user, ch, msg.Seq, "@ai:helper 返信です")
+	if err != nil {
+		t.Fatalf("single AI mention in thread should succeed, got: %v", err)
+	}
+
+	// Multiple AI mentions in PostThreadMessage must be rejected
+	_, err = s.PostThreadMessage(ctx, user, ch, msg.Seq, "@ai:helper @ai:secondbot 返信です")
+	if !errors.Is(err, ErrInvalid) {
+		t.Fatalf("expected ErrInvalid for multiple AI mentions in PostThreadMessage, got: %v", err)
+	}
+}
+

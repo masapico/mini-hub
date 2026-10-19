@@ -115,6 +115,11 @@ const aiMentionRegex = /(?:^|\s)@ai:[A-Za-z0-9_-]+/;
 function textHasAIMention(text) {
     return aiMentionRegex.test(text || "");
 }
+function countAIMentions(text) {
+    if (!text) return 0;
+    const matches = text.match(/(?:^|\s)@ai:[A-Za-z0-9_-]+/g);
+    return matches ? matches.length : 0;
+}
 function formatFileSize(bytes) {
     if (bytes == null || isNaN(bytes)) return "";
     if (bytes < 1024) return `${bytes} B`;
@@ -831,30 +836,55 @@ function syncEditorState() {
     const text = editorValue();
     const bytes = textEncoder.encode(text).length,
         over = bytes > MAX_MESSAGE_BYTES;
-    $("editorLimit").textContent = over ? `${bytes.toLocaleString()} / ${MAX_MESSAGE_BYTES.toLocaleString()} bytes` : "";
     editor.setAttribute("aria-invalid", String(over));
 
-    const hasAI = textHasAIMention(text);
+    const aiCount = countAIMentions(text);
+    const hasAI = aiCount > 0;
+    const multiAI = aiCount > 1;
     const hasAttachments = (S.stagedAttachments || []).length > 0;
-    const attachBtn = $("attachButton");
-    if (attachBtn) {
-        attachBtn.disabled = editor.disabled || !hasAI;
-        attachBtn.title = hasAI ? "ファイルを添付" : "ファイルを添付 (@ai:メンション時のみ有効)";
-    }
-
     const attachWithoutAI = hasAttachments && !hasAI;
-    const inputHint = $("inputHint");
-    if (inputHint) {
-        if (attachWithoutAI) {
-            inputHint.textContent = "添付ファイルはAI宛てメッセージ（@ai:...）にのみ送信できます";
-            inputHint.classList.remove("hidden");
+
+    const limitEl = $("editorLimit");
+    if (limitEl) {
+        if (over) {
+            limitEl.textContent = `${bytes.toLocaleString()} / ${MAX_MESSAGE_BYTES.toLocaleString()} bytes`;
+            limitEl.title = "";
+        } else if (multiAI) {
+            limitEl.textContent = "AIへのメンションは1件まで";
+            limitEl.title = "AIへのメンションは1メッセージにつき1件のみ指定できます";
+        } else if (attachWithoutAI) {
+            limitEl.textContent = "添付はAI宛てのみ可能";
+            limitEl.title = "添付ファイルはAI宛てメッセージ（@ai:...）にのみ送信できます";
         } else {
-            inputHint.textContent = "";
-            inputHint.classList.add("hidden");
+            limitEl.textContent = "";
+            limitEl.title = "";
         }
     }
 
-    $("send").disabled = editor.disabled || over || attachWithoutAI;
+    const attachBtn = $("attachButton");
+    if (attachBtn) {
+        attachBtn.disabled = editor.disabled || !hasAI || multiAI;
+        attachBtn.title = multiAI ? "AIへのメンションは1メッセージにつき1件のみ指定できます" : hasAI ? "ファイルを添付" : "ファイルを添付 (@ai:メンション時のみ有効)";
+    }
+
+    const inputHint = $("inputHint");
+    if (inputHint) {
+        inputHint.textContent = "";
+        inputHint.classList.add("hidden");
+    }
+
+    const sendBtn = $("send");
+    sendBtn.disabled = editor.disabled || over || attachWithoutAI || multiAI;
+    if (multiAI) {
+        sendBtn.title = "AIへのメンションは1メッセージにつき1件のみ指定できます";
+    } else if (attachWithoutAI) {
+        sendBtn.title = "添付ファイルはAI宛てメッセージ（@ai:...）にのみ送信できます";
+    } else if (over) {
+        sendBtn.title = "メッセージサイズが上限を超えています";
+    } else {
+        sendBtn.title = "送信（Ctrl+Enter）／Enterで改行";
+    }
+
     for (const button of document.querySelectorAll(".composer .tools [data-format], #linkButton, #mentionButton, #aiButton"))
         button.disabled = editor.disabled;
 }
@@ -1011,6 +1041,10 @@ async function send() {
     if (!text) return;
     if (textEncoder.encode(text).length > MAX_MESSAGE_BYTES) {
         note("メッセージは16 KiB以内にしてください", true);
+        return;
+    }
+    if (countAIMentions(text) > 1) {
+        note("AIへのメンションは1メッセージにつき1件のみ指定できます", true);
         return;
     }
     const attachmentIds = (S.stagedAttachments || []).map((a) => a.id);

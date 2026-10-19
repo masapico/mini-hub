@@ -1149,13 +1149,18 @@ func (s *Service) GetMessages(ctx context.Context, userID, channelID string, que
 	return page, nil
 }
 
-func hasAIMention(text string) bool {
+func countAIMentions(text string) int {
+	count := 0
 	for _, match := range mentionPattern.FindAllStringSubmatch(text, -1) {
 		if match[1] == "ai" {
-			return true
+			count++
 		}
 	}
-	return false
+	return count
+}
+
+func hasAIMention(text string) bool {
+	return countAIMentions(text) > 0
 }
 
 func (s *Service) PostMessage(ctx context.Context, userID, channelID, text string, attachmentIDs ...string) (domain.Message, error) {
@@ -1164,6 +1169,9 @@ func (s *Service) PostMessage(ctx context.Context, userID, channelID, text strin
 	}
 	if strings.TrimSpace(text) == "" || len([]byte(text)) > MaxMessageBytes {
 		return domain.Message{}, fmt.Errorf("%w: メッセージは空にせず、%dバイト以内にしてください", ErrInvalid, MaxMessageBytes)
+	}
+	if countAIMentions(text) > 1 {
+		return domain.Message{}, fmt.Errorf("%w: AIへのメンションは1メッセージにつき1件のみ指定できます", ErrInvalid)
 	}
 	var attachments []domain.Attachment
 	var attachmentPayloads []AIAttachmentPayload
