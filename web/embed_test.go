@@ -240,9 +240,26 @@ func TestDigitalAgencyDesignSystemIsEmbedded(t *testing.T) {
 		".dads-input-text",
 		":focus-visible",
 		"var(--color-key-900)",
+		".channel-member-tabs",
+		".poll-card",
 	} {
 		if !strings.Contains(componentsCSS, expected) {
 			t.Fatalf("dads-components.css missing %q", expected)
+		}
+	}
+
+	// Verify admin modals and polls use DADS classes
+	for _, expected := range []string{
+		`id="userModal"`,
+		`class="modal-content dads-card user-modal"`,
+		`id="channelManagementModal"`,
+		`id="aiModal"`,
+		`id="pollModal"`,
+		`class="form-control dads-input-text"`,
+		`dads-button--primary`,
+	} {
+		if !strings.Contains(appHTML, expected) {
+			t.Fatalf("app HTML missing DADS modal pattern %q", expected)
 		}
 	}
 }

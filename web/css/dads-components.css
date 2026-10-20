@@ -412,3 +412,174 @@ small.muted {
   font-size: 14px;
 }
 
+/* ==========================================================================
+   Tabs (DADS Style)
+   ========================================================================== */
+
+.channel-member-tabs,
+.user-detail .tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 2px solid var(--dads-border-subtle) !important;
+  padding-bottom: 0 !important;
+}
+
+.channel-member-tabs button,
+.user-detail .tabs button {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 16px;
+  color: var(--dads-text-secondary);
+  background: transparent;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: var(--dads-radius-sm) var(--dads-radius-sm) 0 0;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.channel-member-tabs button:hover,
+.user-detail .tabs button:hover {
+  color: var(--color-key-900);
+  background-color: var(--color-key-50);
+}
+
+.channel-member-tabs button.active,
+.channel-member-tabs button[aria-selected="true"],
+.user-detail .tabs button.active {
+  color: var(--color-key-900) !important;
+  border-bottom: 3px solid var(--color-key-900) !important;
+  background-color: var(--color-key-50) !important;
+  font-weight: 700;
+}
+
+/* ==========================================================================
+   Admin Manager Panels & Lists
+   ========================================================================== */
+
+.user-browser,
+.group-browser,
+.channel-manager-browser {
+  background-color: var(--color-primitive-solid-gray-50) !important;
+  border-right: 1px solid var(--dads-border-subtle) !important;
+}
+
+.user,
+.group-row,
+.managed-channel-row {
+  border-bottom: 1px solid var(--dads-border-subtle) !important;
+  transition: background-color 0.12s ease-in-out;
+}
+
+.user:hover:not(.selected),
+.group-row:hover:not(.selected),
+.managed-channel-row:hover:not(.selected) {
+  background-color: var(--color-primitive-solid-gray-100) !important;
+}
+
+.user.selected,
+.group-row.selected,
+.managed-channel-row.selected {
+  background-color: var(--color-key-50) !important;
+  box-shadow: inset 4px 0 0 var(--color-key-900) !important;
+  color: var(--dads-text-primary) !important;
+}
+
+.user.selected b,
+.group-row.selected b,
+.managed-channel-row.selected b {
+  color: var(--color-key-900) !important;
+}
+
+/* Group Check Rows & Channel Membership Rows */
+.group-check-row,
+.channel-membership-row {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--dads-border-subtle);
+  border-radius: var(--dads-radius-sm);
+  transition: background-color 0.12s ease-in-out;
+}
+
+.group-check-row:hover,
+.channel-membership-row:hover {
+  background-color: var(--color-primitive-solid-gray-100);
+}
+
+.group-check-row:has(input:checked),
+.channel-membership-row:has(input:checked) {
+  background-color: var(--color-key-50);
+}
+
+/* Badges in Admin Lists */
+.user-role {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: var(--dads-radius-full);
+  background-color: var(--color-primitive-solid-gray-200);
+  color: var(--dads-text-secondary);
+}
+
+.user-role.admin {
+  background-color: var(--color-key-100);
+  color: var(--color-key-900);
+}
+
+.user-role.disabled {
+  background-color: var(--color-primitive-red-100);
+  color: var(--color-primitive-red-800);
+}
+
+/* Details summary */
+.channel-basic-settings {
+  border: 1px solid var(--dads-border-subtle);
+  border-radius: var(--dads-radius-md);
+  padding: 12px 16px;
+  background-color: var(--color-primitive-solid-gray-50);
+  margin-bottom: 12px;
+}
+
+.channel-basic-settings summary {
+  font-weight: 700;
+  color: var(--dads-text-primary);
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   Poll Card & Options (DADS Style)
+   ========================================================================== */
+
+.poll-card {
+  border: 1px solid var(--dads-border-subtle) !important;
+  border-radius: var(--dads-radius-lg) !important;
+  background-color: #ffffff !important;
+  box-shadow: var(--dads-shadow-sm) !important;
+}
+
+.poll-card-head strong {
+  color: var(--dads-text-primary) !important;
+  font-size: 16px !important;
+}
+
+.poll-choice {
+  border: 1px solid var(--dads-border-field) !important;
+  border-radius: var(--dads-radius-md) !important;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.poll-choice:hover {
+  background-color: var(--color-primitive-solid-gray-50) !important;
+  border-color: var(--color-primitive-solid-gray-600) !important;
+}
+
+.poll-choice:has(input:checked) {
+  background-color: var(--color-key-50) !important;
+  border-color: var(--color-key-900) !important;
+}
+
+.poll-bar-fill {
+  background-color: var(--color-key-900) !important;
+}
+
+
