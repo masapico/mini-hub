@@ -144,3 +144,150 @@ func TestThreadListCursorAndDefaultUnreadPage(t *testing.T) {
 		t.Fatalf("next=%+v %v", next, err)
 	}
 }
+
+func TestNonParticipatingThreadDoesNotTriggerThreadUpdates(t *testing.T) {
+	svc := setup(t)
+	ctx := context.Background()
+	_, err := svc.CreateUsers(ctx, "admin", []service.NewUser{{ID: "charlie", Name: "Charlie", Password: "password123"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.CreateChannel(ctx, "admin", domain.Channel{ID: "general", Name: "General", Type: domain.ChannelPublic, Members: []string{"alice", "bob", "charlie"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// alice posts a root message
+	root, err := svc.PostMessage(ctx, "alice", "general", "root question")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// bob replies to alice's root message
+	reply1, err := svc.PostThreadMessage(ctx, "bob", "general", root.Seq, "bob's reply")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// alice (root author) should have ThreadUpdates = true
+	aliceStatus, err := svc.GetReadStatus(ctx, "alice", "general")
+	if err != nil || !aliceStatus.ThreadUpdates {
+		t.Fatalf("expected alice ThreadUpdates=true, got %+v (err=%v)", aliceStatus, err)
+	}
+
+	// bob (reply author, own reply) should have ThreadUpdates = false
+	bobStatus, err := svc.GetReadStatus(ctx, "bob", "general")
+	if err != nil || bobStatus.ThreadUpdates {
+		t.Fatalf("expected bob ThreadUpdates=false, got %+v (err=%v)", bobStatus, err)
+	}
+
+	// charlie has not participated in this thread; charlie should have ThreadUpdates = false!
+	charlieStatus, err := svc.GetReadStatus(ctx, "charlie", "general")
+	if err != nil || charlieStatus.ThreadUpdates {
+		t.Fatalf("expected non-participating charlie ThreadUpdates=false, got %+v (err=%v)", charlieStatus, err)
+	}
+
+	// charlie now replies to the thread, becoming a participant
+	charlieReply, err := svc.PostThreadMessage(ctx, "charlie", "general", root.Seq, "charlie joins in")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// charlie marks the thread read up to the posted reply (as the client does when viewing/posting)
+	if err := svc.MarkThreadRead(ctx, "charlie", "general", root.Seq, charlieReply.Seq); err != nil {
+		t.Fatal(err)
+	}
+
+	// charlie has read up to own reply; ThreadUpdates should be false
+	charlieStatus, err = svc.GetReadStatus(ctx, "charlie", "general")
+	if err != nil || charlieStatus.ThreadUpdates {
+		t.Fatalf("expected charlie ThreadUpdates=false after reading up to own reply, got %+v", charlieStatus)
+	}
+
+	// alice posts another reply
+	_, err = svc.PostThreadMessage(ctx, "alice", "general", root.Seq, "alice follow-up")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Now charlie is a participant, so charlie should have ThreadUpdates = true!
+	charlieStatus, err = svc.GetReadStatus(ctx, "charlie", "general")
+	if err != nil || !charlieStatus.ThreadUpdates {
+		t.Fatalf("expected participating charlie ThreadUpdates=true after new reply, got %+v", charlieStatus)
+	}
+
+	_ = reply1
+}
+
+func TestLateJoinerHasNoUnreadThreadUpdates(t *testing.T) {
+	svc := setup(t)
+	ctx := context.Background()
+	_, err := svc.CreateUsers(ctx, "admin", []service.NewUser{{ID: "dave", Name: "Dave", Password: "password123"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.CreateChannel(ctx, "admin", domain.Channel{ID: "discussion", Name: "Discussion", Type: domain.ChannelPublic, Members: []string{"alice", "bob"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Active discussion before dave joins
+	root, err := svc.PostMessage(ctx, "alice", "discussion", "Initial topic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 5; i++ {
+		if _, err := svc.PostThreadMessage(ctx, "bob", "discussion", root.Seq, "reply"); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// dave joins the channel afterwards
+	if _, err := svc.JoinChannel(ctx, "dave", "discussion"); err != nil {
+		t.Fatal(err)
+	}
+
+	status, err := svc.GetReadStatus(ctx, "dave", "discussion")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.UnreadCount != 0 {
+		t.Fatalf("expected dave UnreadCount=0, got %d", status.UnreadCount)
+	}
+	if status.ThreadUpdates {
+		t.Fatalf("expected dave ThreadUpdates=false for past thread replies, got true")
+	}
+}
+
+func TestChangeChannelMembersInitializesReadState(t *testing.T) {
+	svc := setup(t)
+	ctx := context.Background()
+	_, err := svc.CreateChannel(ctx, "admin", domain.Channel{ID: "private-chat", Name: "Private Chat", Type: domain.ChannelPrivate, Members: []string{"alice"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// alice posts messages before bob is invited
+	for i := 0; i < 3; i++ {
+		if _, err := svc.PostMessage(ctx, "alice", "private-chat", "hello"); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// admin adds bob to the private channel
+	_, err = svc.ChangeChannelMembers(ctx, "admin", "private-chat", service.ChannelMemberChanges{AddUsers: []string{"bob"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	status, err := svc.GetReadStatus(ctx, "bob", "private-chat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.UnreadCount != 0 {
+		t.Fatalf("expected newly added bob UnreadCount=0, got %d (lastReadSeq=%d, latestSeq=%d)", status.UnreadCount, status.LastReadSeq, status.LatestSeq)
+	}
+	if status.ThreadUpdates {
+		t.Fatalf("expected newly added bob ThreadUpdates=false, got true")
+	}
+}

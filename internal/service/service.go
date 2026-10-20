@@ -940,6 +940,25 @@ func (s *Service) ChangeChannelMembers(ctx context.Context, actorID, channelID s
 			return nil, fmt.Errorf("%w: グループ %q は存在しません", ErrInvalid, id)
 		}
 	}
+	var addedUsers []string
+	for _, id := range unique(append(append([]string{}, changes.AddUsers...), changes.AddManagers...)) {
+		if !member(channel.Members, id) {
+			addedUsers = append(addedUsers, id)
+		}
+	}
+	if len(addedUsers) > 0 {
+		latest, err := s.storage.LatestMessageSeq(ctx, channelID)
+		if err != nil {
+			lock.Unlock()
+			return nil, err
+		}
+		for _, id := range addedUsers {
+			if err := s.storage.SetReadState(ctx, id, channelID, latest); err != nil {
+				lock.Unlock()
+				return nil, err
+			}
+		}
+	}
 	for _, id := range changes.AddUsers {
 		channel.Members = unique(append(channel.Members, id))
 	}
@@ -1515,7 +1534,7 @@ func (s *Service) readStatus(ctx context.Context, userID, channelID string, last
 	if !joined {
 		return ReadStatus{LastReadSeq: lastRead, LatestSeq: latest}, nil
 	}
-	summaries, err := s.storage.ThreadSummaries(ctx, userID, channelID)
+	summaries, err := s.storage.ThreadSummaries(ctx, userID, channelID, storage.ThreadFilter{Participating: true})
 	if err != nil {
 		return ReadStatus{}, err
 	}

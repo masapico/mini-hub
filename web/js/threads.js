@@ -141,7 +141,8 @@ function absorbThreadSummaries(path, page) {
 }
 function replyLabel(summary) {
     if (!summary?.replyCount) return "返信";
-    return `返信${summary.replyCount}件 · ${new Date(summary.updatedAt).toLocaleTimeString("ja-JP", {hour:"2-digit",minute:"2-digit"})}${summary.unreadCount ? " · 未読あり" : ""}`;
+    const hasUnread = summary.participating && summary.unreadCount;
+    return `返信${summary.replyCount}件 · ${new Date(summary.updatedAt).toLocaleTimeString("ja-JP", {hour:"2-digit",minute:"2-digit"})}${hasUnread ? " · 未読あり" : ""}`;
 }
 function replyButton(message) {
     const button = document.createElement("button");
@@ -151,7 +152,7 @@ function replyButton(message) {
     const channel = S.channel.id, summary = T.summaries.get(threadKey(channel, message.seq));
     button.textContent = replyLabel(summary);
     button.classList.toggle("has-replies", !!summary?.replyCount);
-    button.classList.toggle("has-updates", !!summary?.unreadCount);
+    button.classList.toggle("has-updates", !!(summary?.participating && summary?.unreadCount));
     button.onclick = () => openThread(channel, message.seq).catch(error=>note(error.message,true));
     return button;
 }
@@ -160,7 +161,7 @@ function updateReplyButtons() {
         const summary = T.summaries.get(threadKey(S.channel?.id, button.dataset.threadRoot));
         button.textContent = replyLabel(summary);
         button.classList.toggle("has-replies", !!summary?.replyCount);
-        button.classList.toggle("has-updates", !!summary?.unreadCount);
+        button.classList.toggle("has-updates", !!(summary?.participating && summary?.unreadCount));
     });
 }
 function updateThreadControls() {
@@ -375,7 +376,7 @@ function renderThread(t, focusSeq = null, keepScroll = true) {
     $("threadReplies").replaceChildren();
     let boundary = false;
     for (const m of t.messages) {
-        if (!boundary && m.seq > t.summary.lastReadSeq && m.userId !== S.me.id) {
+        if (t.summary?.participating && !boundary && m.seq > t.summary.lastReadSeq && m.userId !== S.me.id) {
             const line=document.createElement("div");line.className="thread-unread-line";line.textContent="ここから未読";$("threadReplies").append(line);boundary=true;
         }
         $("threadReplies").append(threadMessage(m));
@@ -417,10 +418,12 @@ async function loadThreadPage(t, query = "", mode = "replace", focusSeq = null) 
         t.pending=Math.max(0, t.summary.replyCount && t.summary.latestSeq>(t.messages.at(-1)?.seq||0) ? 1 : 0);
         await syncThreadReactions(t, page.messages);
         if (T.current !== t) return false;
-        renderThread(t,focusSeq || (mode==="replace" ? t.summary.firstUnreadSeq : null),mode!=="replace");
+        const jumpSeq = (t.summary?.participating && t.summary?.firstUnreadSeq) ? t.summary.firstUnreadSeq : null;
+        renderThread(t,focusSeq || (mode==="replace" ? jumpSeq : null),mode!=="replace");
         if(mode==="older")scroll.scrollTop=oldTop+scroll.scrollHeight-oldHeight;
-        if(mode==="replace" && !focusSeq && !t.summary.firstUnreadSeq)scroll.scrollTop=scroll.scrollHeight;
-        $("threadStatus").textContent=`返信${t.summary.replyCount}件${t.summary.unreadCount ? ` · 未読${t.summary.unreadCount}件` : ""}`;
+        if(mode==="replace" && !focusSeq && !jumpSeq)scroll.scrollTop=scroll.scrollHeight;
+        const unreadText = (t.summary?.participating && t.summary?.unreadCount) ? ` · 未読${t.summary.unreadCount}件` : "";
+        $("threadStatus").textContent=`返信${t.summary.replyCount}件${unreadText}`;
         if(focusSeq&&!t.messages.some(m=>m.seq===focusSeq))throw Error("対象の返信を表示できませんでした");
         return true;
     } catch(error) {
@@ -459,7 +462,8 @@ async function writeThreadRead(t,seq) {
         const summaries=await api(`/api/channels/${encodeURIComponent(t.channel)}/thread-summaries?roots=${t.root}`);
         if(T.current!==t)return;
         if(summaries.threads[t.root])t.summary=summaries.threads[t.root];
-        $("threadStatus").textContent=`返信${t.summary.replyCount}件${t.summary.unreadCount ? ` · 未読${t.summary.unreadCount}件` : ""}`;
+        const unreadText = (t.summary?.participating && t.summary?.unreadCount) ? ` · 未読${t.summary.unreadCount}件` : "";
+        $("threadStatus").textContent=`返信${t.summary.replyCount}件${unreadText}`;
         scheduleThreadSync();
     }catch(error){if(T.current===t)$("threadStatus").textContent=`既読を更新できません: ${error.message}`;}
     finally{t.reading=false;}
@@ -493,7 +497,7 @@ async function showThreadList(channel = "", append = false) {
     $("threadTab").classList.add("active");
     if(!append)host.textContent="返信の更新を読み込んでいます…";
     try{
-        const base=channel ? `/api/channels/${encodeURIComponent(channel)}/threads?` : "/api/threads?participating=true&";
+        const base=channel ? `/api/channels/${encodeURIComponent(channel)}/threads?participating=true&` : "/api/threads?participating=true&";
         const page=await api(`${base}unread=true&limit=50${append&&T.listCursor ? "&cursor="+encodeURIComponent(T.listCursor) : ""}`);
         if(token!==T.listToken)return;
         const items=new Map(T.list.map(t=>[threadKey(t.channelId,t.rootSeq),t]));
@@ -549,7 +553,7 @@ async function syncThreads(full = true) {
         for(const event of events){
             await api(`/api/channels/${encodeURIComponent(event.channelId)}/thread-summaries?roots=${event.threadRootSeq}`).catch(()=>null);
             const summary=T.summaries.get(threadKey(event.channelId,event.threadRootSeq));
-            if(summary?.unreadCount) {
+            if(summary?.participating && summary.unreadCount) {
                 const status=S.read.get(event.channelId);if(status)status.threadUpdates=true;
                 const channelButton=[...document.querySelectorAll(".channel")].find(b=>b.dataset.channelId===event.channelId);
                 if(channelButton&&!channelButton.querySelector(".channel-thread-update")){
