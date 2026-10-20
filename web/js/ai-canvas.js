@@ -423,18 +423,20 @@
 
         const prev = select.value || State.activeAccountID;
         select.innerHTML = "";
-        accounts.forEach((a) => {
+        const sortedAccounts = [...accounts].sort((a, b) =>
+            (a.name || "").localeCompare(b.name || "", "ja") || a.id.localeCompare(b.id));
+        sortedAccounts.forEach((a) => {
             const opt = document.createElement("option");
             opt.value = a.id;
             opt.textContent = `${a.name} (${a.id})`;
             select.append(opt);
         });
 
-        if (accounts.some(a => a.id === prev)) {
+        if (sortedAccounts.some(a => a.id === prev)) {
             select.value = prev;
             State.activeAccountID = prev;
-        } else {
-            State.activeAccountID = accounts[0].id;
+        } else if (sortedAccounts.length > 0) {
+            State.activeAccountID = sortedAccounts[0].id;
             select.value = State.activeAccountID;
         }
     }

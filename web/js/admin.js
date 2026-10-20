@@ -151,6 +151,8 @@ function renderChannelMembers() {
     const visible = members.filter((user) => !query ||
         displayName(user).toLocaleLowerCase("ja-JP").includes(query) ||
         user.id.toLocaleLowerCase("ja-JP").includes(query));
+    visible.sort((a, b) =>
+        displayName(a).localeCompare(displayName(b), "ja") || a.id.localeCompare(b.id));
     $("memberCount").textContent = visible.length + " / " + members.length + " 名";
     $("memberSearch").disabled = !S.channel;
     const host = $("members");

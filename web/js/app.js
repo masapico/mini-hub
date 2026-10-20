@@ -46,7 +46,8 @@ function messageAuthor(message) {
 function aiCandidates(query = "") {
     const normalized = query.trim().toLocaleLowerCase("ja-JP");
     return S.aiAccounts.filter(a => !normalized || `${a.id} ${a.name}`.toLocaleLowerCase("ja-JP").includes(normalized))
-        .map(a => ({id: `ai:${a.id}`, name: a.name}));
+        .map(a => ({id: `ai:${a.id}`, name: a.name}))
+        .sort((a, b) => a.name.localeCompare(b.name, "ja") || a.id.localeCompare(b.id));
 }
 
 function withdrawnNotice(message) {
@@ -2088,23 +2089,20 @@ function renderMentionMenu(query = "") {
         return;
     }
     const normalized = query.trim().toLocaleLowerCase("ja-JP");
-    for (const groupID of S.channel?.groups || []) {
-        const name = S.groups.get(groupID) || groupID;
-        if (
-            normalized &&
-            !groupID.toLocaleLowerCase().includes(normalized) &&
-            !name.toLocaleLowerCase("ja-JP").includes(normalized)
-        )
-            continue;
+    const channelGroups = (S.channel?.groups || [])
+        .map(groupID => ({ id: groupID, name: S.groups.get(groupID) || groupID }))
+        .filter(g => !normalized || g.id.toLocaleLowerCase().includes(normalized) || g.name.toLocaleLowerCase("ja-JP").includes(normalized))
+        .sort((a, b) => a.name.localeCompare(b.name, "ja") || a.id.localeCompare(b.id));
+    for (const group of channelGroups) {
         const option = document.createElement("button");
         option.type = "button";
         option.className = "mention-option";
         option.innerHTML =
             '<span class="mini">G</span><span><b></b><small></small></span>';
-        option.querySelector("b").textContent = name;
-        option.querySelector("small").textContent = "グループ · @" + groupID;
+        option.querySelector("b").textContent = group.name;
+        option.querySelector("small").textContent = "グループ · @" + group.id;
         option.onclick = () => {
-            insertMention("group:" + groupID, name);
+            insertMention("group:" + group.id, group.name);
             closeMainMentionMenu();
         };
         options.append(option);
