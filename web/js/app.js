@@ -214,32 +214,7 @@ function setConnectionStatus(label, connected = false) {
         $("onlineUsersBadge")?.classList.add("hidden");
     }
 }
-function setup(me) {
-    S.me = me;
-    S.csrf = me.csrfToken;
-    $("me").textContent = me.name;
-    $("avatar").textContent = ini(me.name);
-    $("admin").classList.toggle("hidden", me.role !== "admin");
-	$("changePassword").classList.toggle("hidden", !me.capabilities?.selfPasswordChange);
-	loadLocalNotifications();
-}
-async function loadChannels() {
-    S.channels = await api("/api/channels");
-    for (let type of ["public", "private"]) {
-        let h = $(type);
-        h.replaceChildren();
-        for (let c of S.channels.filter((x) => x.type === type)) {
-            let b = document.createElement("button");
-            b.className =
-                "channel" +
-                (S.channel?.id === c.id ? " active" : "");
-            b.innerHTML = `<span>${type === "private" ? icon("lock-fill") : "#"}</span><span></span>${S.unread.get(c.id) ? `<i class="tc-badge">${S.unread.get(c.id)}</i>` : ""}`;
-            b.children[1].textContent = c.name;
-            b.onclick = () => select(c.id);
-            h.append(b);
-        }
-    }
-}
+let setup, loadChannels, select, render, catchup, realtime;
 async function loadGroups() {
     const groups = await api("/api/groups");
     S.groups = new Map(groups.map((group) => [group.id, group.name]));
@@ -265,40 +240,6 @@ function setSelectedGroups(id, groupIDs) {
     const selected = new Set(groupIDs || []);
     for (const option of $(id).options)
         option.selected = selected.has(option.value);
-}
-async function select(id) {
-    closeMainMentionMenu();
-    S.stagedAttachments = [];
-    renderStagedAttachments();
-    syncEditorState();
-    S.channel = await api(
-        "/api/channels/" + encodeURIComponent(id),
-    );
-    S.unread.delete(id);
-    await loadChannels();
-    let c = S.channel;
-    $("title").innerHTML = (c.type === "private" ? icon("lock-fill") : "#") + " <span></span>";
-    $("title").querySelector("span").textContent = c.name;
-    $("desc").textContent = c.id;
-    $("info").textContent =
-        (c.type === "public" ? "公開" : "非公開") +
-        " / 作成者 " +
-        c.createdBy;
-    $("members").innerHTML = "";
-    for (let x of c.members || []) {
-        let d = document.createElement("div");
-        d.className = "member";
-        d.textContent = x;
-        $("members").append(d);
-    }
-    renderChannelAction(c);
-    $("input").disabled = $("send").disabled = !member(c);
-    const page = await api(
-        `/api/channels/${encodeURIComponent(id)}/messages?after=0&limit=500`,
-    );
-    S.msgs = page.messages;
-    render();
-    $("messages").scrollTop = $("messages").scrollHeight;
 }
 const MAX_MESSAGE_BYTES = 16 * 1024,
     editor = $("input"),
@@ -969,65 +910,7 @@ function installRichEditor(root, {toolbar, limit, sendButton, sync, onInput}) {
         button.onclick = () => applyEditorFormat(button.dataset.format, root, toolbar, sync);
     return update;
 }
-function render() {
-    let h = $("messages");
-    h.replaceChildren();
-    for (let m of S.msgs) {
-        let a = document.createElement("article");
-        a.className = "message";
-        a.innerHTML =
-            '<div><div class="head"><span></span><i class="time"></i></div><div class="text"></div></div>';
-        a.querySelector(".head span").textContent = m.userId;
-        a.querySelector(".time").textContent = new Date(
-            m.ts,
-        ).toLocaleString("ja-JP");
-        a.querySelector(".text").append(renderMessageText(m));
-        if (!m.withdrawnAt && m.attachments && m.attachments.length) {
-            const atts = renderAttachments(m.attachments);
-            if (atts) a.querySelector(".text").append(atts);
-        }
-        h.append(a);
-    }
-}
-async function catchup() {
-    if (!S.channel) return;
-    let page = await api(
-        `/api/channels/${S.channel.id}/messages?after=${S.msgs.at(-1)?.seq || 0}&limit=500`,
-    );
-    const x = page.messages;
-    if (x.length) {
-        S.msgs.push(...x);
-        render();
-    }
-}
-function realtime() {
-    let w = new WebSocket(
-        Minihub.websocketURL(),
-    );
-    S.ws = w;
-    w.onopen = () => {
-        setConnectionStatus("オンライン", true);
-        catchup();
-    };
-    w.onmessage = (e) => {
-        let m = JSON.parse(e.data);
-        if (m.type !== "new_message") return;
-        if (S.channel?.id === m.channelId) catchup();
-        else {
-            S.unread.set(
-                m.channelId,
-                (S.unread.get(m.channelId) || 0) + 1,
-            );
-            loadChannels();
-        }
-    };
-    w.onclose = () => {
-        if (S.ws === w) {
-            setConnectionStatus("再接続待ち");
-            setTimeout(realtime, 2000);
-        }
-    };
-}
+
 $("logout").onclick = async () => {
     try {
         window.resetAICanvas?.();
