@@ -47,7 +47,7 @@ function aiCandidates(query = "") {
     const normalized = query.trim().toLocaleLowerCase("ja-JP");
     return S.aiAccounts.filter(a => !normalized || `${a.id} ${a.name}`.toLocaleLowerCase("ja-JP").includes(normalized))
         .map(a => ({id: `ai:${a.id}`, name: a.name}))
-        .sort((a, b) => a.name.localeCompare(b.name, "ja") || a.id.localeCompare(b.id));
+        .sort((a, b) => a.id.localeCompare(b.id));
 }
 
 function withdrawnNotice(message) {
@@ -2015,8 +2015,7 @@ function channelMentionCandidates(channel, query = "") {
             !user.id.toLocaleLowerCase().includes(normalized)) continue;
         candidates.set(user.id, { id: user.id, name });
     }
-    return [...candidates.values()].sort((a, b) =>
-        a.name.localeCompare(b.name, "ja") || a.id.localeCompare(b.id));
+    return [...candidates.values()].sort((a, b) => a.id.localeCompare(b.id));
 }
 function watchMentionPresence(channelID) {
     const count = S.presenceRefs.get(channelID) || 0;
@@ -2092,7 +2091,7 @@ function renderMentionMenu(query = "") {
     const channelGroups = (S.channel?.groups || [])
         .map(groupID => ({ id: groupID, name: S.groups.get(groupID) || groupID }))
         .filter(g => !normalized || g.id.toLocaleLowerCase().includes(normalized) || g.name.toLocaleLowerCase("ja-JP").includes(normalized))
-        .sort((a, b) => a.name.localeCompare(b.name, "ja") || a.id.localeCompare(b.id));
+        .sort((a, b) => a.id.localeCompare(b.id));
     for (const group of channelGroups) {
         const option = document.createElement("button");
         option.type = "button";
@@ -2402,9 +2401,7 @@ loadChannels = async function () {
             .filter((channel) => channel.type === type)
             .sort((left, right) => {
                 const membershipOrder = Number(member(right)) - Number(member(left));
-                return membershipOrder ||
-                    left.name.localeCompare(right.name, "ja") ||
-                    left.id.localeCompare(right.id);
+                return membershipOrder || left.id.localeCompare(right.id);
             });
         updateChannelSectionSummary(type, channels);
         for (const c of channels) {

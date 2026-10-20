@@ -423,8 +423,7 @@
 
         const prev = select.value || State.activeAccountID;
         select.innerHTML = "";
-        const sortedAccounts = [...accounts].sort((a, b) =>
-            (a.name || "").localeCompare(b.name || "", "ja") || a.id.localeCompare(b.id));
+        const sortedAccounts = [...accounts].sort((a, b) => a.id.localeCompare(b.id));
         sortedAccounts.forEach((a) => {
             const opt = document.createElement("option");
             opt.value = a.id;
