@@ -1,18 +1,20 @@
-/* Shared visual language for chat and scheduling. */
+/* Shared visual language for chat and scheduling (Integrated with Digital Agency Design System). */
 :root {
+    /* Digital Agency Design System (DADS) Key & Semantic Colors */
     --ui-primary: #334155;
-    --ui-ink: #1e293b;
-    --ui-muted: #64748b;
-    --ui-line: #cbd5e1;
+    --ui-ink: var(--color-primitive-solid-gray-900, #1e293b);
+    --ui-muted: var(--color-primitive-solid-gray-500, #64748b);
+    --ui-line: var(--color-primitive-solid-gray-300, #cbd5e1);
     --ui-control-line: #94a3b8;
-    --ui-subtle: #f8fafc;
-    --ui-hover: #f1f5f9;
-    --ui-focus: #2563eb;
-    --ui-unread: #1d4ed8;
+    --ui-subtle: var(--color-primitive-solid-gray-50, #f8fafc);
+    --ui-hover: var(--color-primitive-solid-gray-100, #f1f5f9);
+    --ui-focus: var(--color-key-900, #002b80);
+    --ui-unread: var(--color-primitive-blue-600, #1d4ed8);
     --ui-mention: #92400e;
     --ui-mention-line: #b45309;
-    --ui-radius-control: 6px;
-    --ui-radius-panel: 8px;
+    --ui-radius-control: var(--dads-radius-md, 6px);
+    --ui-radius-panel: var(--dads-radius-lg, 8px);
+
     /* Type scale: nothing smaller than --fs-xs (12px). */
     --fs-xs: 12px;
     --fs-sm: 13px;

@@ -164,6 +164,8 @@ func TestHandlerServesEmbeddedAssets(t *testing.T) {
 	handler := Handler(testAuthenticator(false))
 	for _, path := range []string{
 		"/css/app.css",
+		"/css/dads-tokens.css",
+		"/css/dads-components.css",
 		"/js/app.js",
 		"/js/admin.js",
 		"/js/login.js",
@@ -195,6 +197,52 @@ func TestHandlerServesEmbeddedAssets(t *testing.T) {
 	} {
 		if body := request(t, handler, path).Body.String(); strings.Contains(body, "sourceMappingURL=") {
 			t.Errorf("GET %s: references an unavailable source map", path)
+		}
+	}
+}
+
+func TestDigitalAgencyDesignSystemIsEmbedded(t *testing.T) {
+	handler := Handler(testAuthenticator(true))
+
+	// Verify links in HTML pages
+	appHTML := request(t, handler, "/").Body.String()
+	if !strings.Contains(appHTML, `/css/dads-tokens.css`) || !strings.Contains(appHTML, `/css/dads-components.css`) {
+		t.Fatal("app HTML missing DADS stylesheet links")
+	}
+
+	loginHTML := request(t, Handler(testAuthenticator(false)), "/login").Body.String()
+	if !strings.Contains(loginHTML, `/css/dads-tokens.css`) || !strings.Contains(loginHTML, `/css/dads-components.css`) {
+		t.Fatal("login HTML missing DADS stylesheet links")
+	}
+
+	scheduleHTML := request(t, handler, "/schedules").Body.String()
+	if !strings.Contains(scheduleHTML, `/css/dads-tokens.css`) || !strings.Contains(scheduleHTML, `/css/dads-components.css`) {
+		t.Fatal("schedule HTML missing DADS stylesheet links")
+	}
+
+	// Verify DADS tokens CSS contains key definitions
+	tokensCSS := request(t, handler, "/css/dads-tokens.css").Body.String()
+	for _, expected := range []string{
+		"--color-primitive-blue-900: #002b80",
+		"--color-key-900: var(--color-primitive-blue-900)",
+		"--dads-focus-outline: 2px solid var(--dads-focus-color)",
+		"--dads-font-family:",
+	} {
+		if !strings.Contains(tokensCSS, expected) {
+			t.Fatalf("dads-tokens.css missing %q", expected)
+		}
+	}
+
+	// Verify DADS components CSS contains button and form styles
+	componentsCSS := request(t, handler, "/css/dads-components.css").Body.String()
+	for _, expected := range []string{
+		".dads-button",
+		".dads-input-text",
+		":focus-visible",
+		"var(--color-key-900)",
+	} {
+		if !strings.Contains(componentsCSS, expected) {
+			t.Fatalf("dads-components.css missing %q", expected)
 		}
 	}
 }

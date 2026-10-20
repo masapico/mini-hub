@@ -23,13 +23,7 @@ body {
 body {
     margin: 0;
     font-family:
-        Inter,
-        system-ui,
-        -apple-system,
-        "Segoe UI",
-        "Yu Gothic",
-        Meiryo,
-        sans-serif;
+        var(--dads-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "BIZ UDPGothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif);
     color: var(--ink);
     overflow: hidden;
 }
@@ -721,8 +715,16 @@ select {
 .field textarea,
 .field select {
     padding: 9px;
-    border: 1px solid #cfded3;
-    border-radius: 8px;
+    border: 1px solid var(--dads-border-field, #94a3b8);
+    border-radius: var(--dads-radius-md, 8px);
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
+    border-color: var(--dads-border-focus, #002b80);
+    outline: var(--dads-focus-outline, 2px solid #002b80);
+    outline-offset: 1px;
 }
 .field textarea {
     height: 170px;

@@ -1,0 +1,414 @@
+/**
+ * デジタル庁デザインシステム（DADS）コンポーネントスタイル
+ * Digital Agency Design System Component Styles
+ * https://design.digital.go.jp/
+ */
+
+/* ==========================================================================
+   Base & Typography
+   ========================================================================== */
+
+body {
+  font-family: var(--dads-font-family);
+  color: var(--dads-text-primary);
+  line-height: var(--dads-line-height-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Accessible focus ring */
+:focus-visible {
+  outline: var(--dads-focus-outline) !important;
+  outline-offset: var(--dads-focus-offset) !important;
+}
+
+/* Links */
+a {
+  color: var(--dads-text-link);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.15s ease-in-out;
+}
+
+a:hover {
+  color: var(--dads-text-link-hover);
+}
+
+/* ==========================================================================
+   Buttons (DADS style)
+   ========================================================================== */
+
+.dads-button,
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: var(--dads-line-height-snug);
+  text-decoration: none;
+  text-align: center;
+  vertical-align: middle;
+  cursor: pointer;
+  user-select: none;
+  border-radius: var(--dads-radius-md);
+  border: 1px solid transparent;
+  padding: 8px 16px;
+  min-height: 40px;
+  transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.dads-button:focus-visible,
+.btn:focus-visible {
+  outline: var(--dads-focus-outline) !important;
+  outline-offset: var(--dads-focus-offset) !important;
+  box-shadow: none !important;
+}
+
+/* Size small */
+.dads-button--sm,
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 13px;
+  min-height: 32px;
+  border-radius: var(--dads-radius-sm);
+}
+
+/* Primary Button (Solid Fill) */
+.dads-button--primary,
+.btn-primary,
+.btn-success {
+  background-color: var(--color-key-900) !important;
+  border-color: var(--color-key-900) !important;
+  color: #ffffff !important;
+}
+
+.dads-button--primary:hover,
+.btn-primary:hover,
+.btn-success:hover {
+  background-color: var(--color-key-800) !important;
+  border-color: var(--color-key-800) !important;
+  color: #ffffff !important;
+}
+
+.dads-button--primary:active,
+.btn-primary:active,
+.btn-success:active {
+  background-color: var(--color-key-700) !important;
+  border-color: var(--color-key-700) !important;
+  color: #ffffff !important;
+}
+
+/* Secondary Button (Outlined) */
+.dads-button--secondary,
+.btn-outline-secondary,
+.btn-secondary {
+  background-color: #ffffff !important;
+  border-color: var(--dads-border-field) !important;
+  color: var(--dads-text-secondary) !important;
+}
+
+.dads-button--secondary:hover,
+.btn-outline-secondary:hover,
+.btn-secondary:hover {
+  background-color: var(--color-primitive-solid-gray-100) !important;
+  border-color: var(--color-primitive-solid-gray-600) !important;
+  color: var(--dads-text-primary) !important;
+}
+
+/* Primary Outlined */
+.btn-outline-primary {
+  background-color: #ffffff !important;
+  border-color: var(--color-key-900) !important;
+  color: var(--color-key-900) !important;
+}
+
+.btn-outline-primary:hover {
+  background-color: var(--color-key-50) !important;
+  border-color: var(--color-key-800) !important;
+  color: var(--color-key-800) !important;
+}
+
+/* Danger Button */
+.dads-button--danger,
+.btn-danger {
+  background-color: var(--color-primitive-red-700) !important;
+  border-color: var(--color-primitive-red-700) !important;
+  color: #ffffff !important;
+}
+
+.dads-button--danger:hover,
+.btn-danger:hover {
+  background-color: var(--color-primitive-red-800) !important;
+  border-color: var(--color-primitive-red-800) !important;
+  color: #ffffff !important;
+}
+
+.btn-outline-danger {
+  background-color: #ffffff !important;
+  border-color: var(--color-primitive-red-700) !important;
+  color: var(--color-primitive-red-700) !important;
+}
+
+.btn-outline-danger:hover {
+  background-color: var(--color-primitive-red-50) !important;
+  border-color: var(--color-primitive-red-800) !important;
+  color: var(--color-primitive-red-800) !important;
+}
+
+/* Disabled State */
+.dads-button:disabled,
+.btn:disabled,
+.btn.disabled {
+  background-color: var(--dads-bg-disabled) !important;
+  border-color: var(--dads-border-subtle) !important;
+  color: var(--dads-text-disabled) !important;
+  cursor: not-allowed;
+  opacity: 1 !important;
+}
+
+/* ==========================================================================
+   Form Controls (Input, Select, Textarea, Checkbox)
+   ========================================================================== */
+
+.dads-label,
+.form-label,
+.field label {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--dads-text-primary);
+  margin-bottom: 6px;
+}
+
+.dads-required-badge,
+.badge-required,
+.field-hint {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  border-radius: var(--dads-radius-sm);
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.dads-required-badge,
+.badge-required {
+  background-color: var(--color-primitive-red-700);
+  color: #ffffff;
+}
+
+.field-hint {
+  background-color: var(--color-primitive-solid-gray-200);
+  color: var(--dads-text-secondary);
+}
+
+.dads-input-text,
+.dads-textarea,
+.dads-select,
+.form-control,
+.form-select {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 14px;
+  line-height: var(--dads-line-height-base);
+  color: var(--dads-text-primary);
+  background-color: #ffffff;
+  border: 1px solid var(--dads-border-field);
+  border-radius: var(--dads-radius-md);
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-control-sm,
+.form-select-sm {
+  padding: 4px 8px;
+  font-size: 13px;
+  border-radius: var(--dads-radius-sm);
+}
+
+.form-control:focus,
+.form-select:focus,
+.dads-input-text:focus,
+.dads-textarea:focus,
+.dads-select:focus {
+  border-color: var(--dads-border-focus) !important;
+  outline: var(--dads-focus-outline) !important;
+  outline-offset: 1px !important;
+  box-shadow: none !important;
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  background-color: var(--dads-bg-secondary);
+  border-color: var(--dads-border-subtle);
+  color: var(--dads-text-disabled);
+  cursor: not-allowed;
+}
+
+/* Checkbox & Radio */
+.form-check-input {
+  width: 1.15em;
+  height: 1.15em;
+  margin-top: 0.15em;
+  vertical-align: top;
+  border: 1px solid var(--dads-border-field);
+  border-radius: var(--dads-radius-sm);
+  background-color: #ffffff;
+  cursor: pointer;
+}
+
+.form-check-input:checked {
+  background-color: var(--color-key-900);
+  border-color: var(--color-key-900);
+}
+
+.form-check-input:focus {
+  border-color: var(--dads-border-focus);
+  outline: var(--dads-focus-outline) !important;
+  outline-offset: 2px !important;
+  box-shadow: none !important;
+}
+
+.form-check-label {
+  color: var(--dads-text-primary);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+/* Support text & error messages */
+.dads-support-text,
+.muted,
+.form-text,
+small.muted {
+  color: var(--dads-text-description);
+  font-size: 12px;
+  margin-top: 4px;
+  display: block;
+}
+
+.dads-error-text,
+.invalid-feedback,
+.text-danger {
+  color: var(--dads-text-danger) !important;
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+/* ==========================================================================
+   Cards & Surfaces
+   ========================================================================== */
+
+.dads-card,
+.card,
+.panel {
+  background-color: var(--dads-bg-surface);
+  border: 1px solid var(--dads-border-subtle);
+  border-radius: var(--dads-radius-lg);
+  box-shadow: var(--dads-shadow-sm);
+}
+
+/* ==========================================================================
+   Alerts & Notifications
+   ========================================================================== */
+
+.dads-alert,
+.alert {
+  padding: 12px 16px;
+  border-radius: var(--dads-radius-md);
+  font-size: 14px;
+  line-height: var(--dads-line-height-base);
+  border: 1px solid transparent;
+  margin-bottom: 1rem;
+}
+
+.alert-danger {
+  background-color: var(--color-primitive-red-50) !important;
+  border-color: var(--color-primitive-red-300) !important;
+  color: var(--color-primitive-red-900) !important;
+}
+
+.alert-success {
+  background-color: var(--color-primitive-green-50) !important;
+  border-color: var(--color-primitive-green-300) !important;
+  color: var(--color-primitive-green-900) !important;
+}
+
+.alert-warning {
+  background-color: var(--color-primitive-yellow-50) !important;
+  border-color: var(--color-primitive-yellow-300) !important;
+  color: var(--color-primitive-yellow-900) !important;
+}
+
+.alert-info {
+  background-color: var(--color-primitive-blue-50) !important;
+  border-color: var(--color-primitive-blue-300) !important;
+  color: var(--color-primitive-blue-900) !important;
+}
+
+/* ==========================================================================
+   Modals & Dialogs
+   ========================================================================== */
+
+.modal-content {
+  border: 1px solid var(--dads-border-subtle);
+  border-radius: var(--dads-radius-lg);
+  box-shadow: var(--dads-shadow-lg);
+}
+
+.modal-header {
+  border-bottom: 1px solid var(--dads-border-subtle);
+  padding: 16px 20px;
+}
+
+.modal-title {
+  color: var(--dads-text-primary);
+  font-weight: 700;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.modal-footer {
+  border-top: 1px solid var(--dads-border-subtle);
+  padding: 16px 20px;
+  background-color: var(--dads-bg-secondary);
+}
+
+/* Close button */
+.btn-close:focus {
+  outline: var(--dads-focus-outline) !important;
+  outline-offset: var(--dads-focus-offset) !important;
+  box-shadow: none !important;
+}
+
+/* ==========================================================================
+   Tables (DADS Style)
+   ========================================================================== */
+
+.table {
+  color: var(--dads-text-primary);
+  border-color: var(--dads-border-subtle);
+}
+
+.table th {
+  background-color: var(--color-primitive-solid-gray-100);
+  color: var(--dads-text-primary);
+  font-weight: 700;
+  font-size: 13px;
+  border-bottom: 2px solid var(--dads-border-divider);
+  padding: 10px 12px;
+}
+
+.table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--dads-border-subtle);
+  font-size: 14px;
+}
+
