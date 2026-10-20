@@ -233,7 +233,7 @@ func TestDigitalAgencyDesignSystemIsEmbedded(t *testing.T) {
 		}
 	}
 
-	// Verify DADS components CSS contains button and form styles
+	// Verify DADS components CSS contains button, form, tabs, and focus-feedback styles
 	componentsCSS := request(t, handler, "/css/dads-components.css").Body.String()
 	for _, expected := range []string{
 		".dads-button",
@@ -242,6 +242,9 @@ func TestDigitalAgencyDesignSystemIsEmbedded(t *testing.T) {
 		"var(--color-key-900)",
 		".channel-member-tabs",
 		".poll-card",
+		".composer .box:focus-within .tools",
+		".composer .box:focus-within .tools #send:not(:disabled)",
+		".thread-editor-box:focus-within .thread-tools #threadSend:not(:disabled)",
 	} {
 		if !strings.Contains(componentsCSS, expected) {
 			t.Fatalf("dads-components.css missing %q", expected)

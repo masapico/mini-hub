@@ -90,7 +90,7 @@
 .app .channel.active {
     background: #fff;
     color: #0f172a;
-    box-shadow: inset 3px 0 0 #334155, 0 1px 3px #64748b26;
+    box-shadow: inset 3px 0 0 var(--color-key-900, #002b80), 0 1px 3px rgba(0, 43, 128, 0.1);
 }
 .app .side .channel:hover:not(.active) { background: #dce6f1; }
 .app .channel.active .channel-kind { color: #475569; }
@@ -191,7 +191,9 @@
     background: #f8fafc;
     border-bottom-color: #cbd5e1;
 }
-.app .tools #send { box-shadow: -8px 0 8px #f8fafc; }
+.app .tools #send {
+    box-shadow: -8px 0 8px #f8fafc;
+}
 .app .fmt:hover,
 .app .iconbtn:hover { background: #f1f5f9; }
 .app .fmt.active,
