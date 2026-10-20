@@ -122,5 +122,8 @@
   --dads-radius-md: 6px;
   --dads-radius-lg: 8px;
   --dads-radius-full: 9999px;
+
+  /* Poll Chart Colors */
+  --poll-bar-color: #0d9488;
 }
 

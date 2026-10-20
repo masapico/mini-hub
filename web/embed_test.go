@@ -121,8 +121,8 @@ func TestSchedulePagesAndSafeNewTabLinksAreEmbedded(t *testing.T) {
 		}
 	}
 	pollScript := request(t, handler, "/js/polls.js").Body.String()
-	if !strings.Contains(pollScript, `noopener,noreferrer`) || !strings.Contains(pollScript, `pollRenderCard`) {
-		t.Fatal("safe poll and schedule links are missing")
+	if !strings.Contains(pollScript, `noopener,noreferrer`) || !strings.Contains(pollScript, `pollRenderCard`) || !strings.Contains(pollScript, `fill.style.opacity`) {
+		t.Fatal("safe poll and schedule links or dynamic poll opacity are missing")
 	}
 	script := request(t, handler, "/js/app.js").Body.String()
 	for _, expected := range []string{`link.target = "_blank"`, `link.rel = "noopener noreferrer"`, `scheduleReference`} {
@@ -225,6 +225,7 @@ func TestDigitalAgencyDesignSystemIsEmbedded(t *testing.T) {
 	for _, expected := range []string{
 		"--color-primitive-blue-900: #002b80",
 		"--color-key-900: var(--color-primitive-blue-900)",
+		"--poll-bar-color: #0d9488",
 		"--dads-focus-outline: 2px solid var(--dads-focus-color)",
 		"--dads-font-family:",
 	} {
