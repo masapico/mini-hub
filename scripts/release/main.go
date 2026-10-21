@@ -294,7 +294,7 @@ func createRelease(root, version string, info buildInfo, licenses []licenseFile,
 			}
 		}
 		if t.os == "windows" {
-			if err := copyFile(filepath.Join(root, "scripts/backup.bat"), filepath.Join(bundle, "scripts/backup.bat")); err != nil {
+			if err := copyFile(filepath.Join(root, "scripts/backup.ps1"), filepath.Join(bundle, "scripts/backup.ps1")); err != nil {
 				return err
 			}
 		}

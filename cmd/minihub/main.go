@@ -49,6 +49,9 @@ func run() (runErr error) {
 	if len(os.Args) > 1 && os.Args[1] == "stop" {
 		return stopServer(os.Args[2:])
 	}
+	if len(os.Args) > 1 && os.Args[1] == "backup" {
+		return backup(os.Args[2:])
+	}
 	if len(os.Args) > 1 && os.Args[1] == "retention" {
 		return retention(os.Args[2:])
 	}

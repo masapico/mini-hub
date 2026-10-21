@@ -70,7 +70,7 @@ macOS／Linux：
 ./minihub.exe stop -config minihub.json -wait 60s
 ```
 
-Windowsの`scripts/backup.bat`はパス設定を編集してから使用します。実行ファイル・設定・データ・バックアップ先のパスを環境に合わせてください。手順は[管理者マニュアルのWindowsバックアップ手順](docs/admin-manual.md#windowsのバックアップ)に記載しています。
+Windowsの`scripts/backup.ps1`は、サーバーを停止することなく稼働中のままSQLiteの整合性スナップショットを取得し、AWS S3へ暗号化アップロードします。パラメータやタスクスケジューラ登録手順は[管理者マニュアルのバックアップ手順](docs/admin-manual.md#バックアップと復元)に記載しています。
 
 ## 更新・バックアップ
 

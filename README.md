@@ -34,7 +34,7 @@
 - ○・△・×で回答する予定調整
 - 管理者によるユーザー・チャンネル・グループ管理
 - 投稿の取り消し・復元、チャンネルのアーカイブ・復元
-- 組み込みSQLiteによるデータ永続性と、停止中のバックアップ・保存期間による削除
+- 組み込みSQLiteによるデータ永続性と、無停止（ホット）バックアップ・保存期間による削除
 - AI連携機能（OpenAI互換リクエスト, llama.cppなどのローカルLLM）
   - **[AI連携](docs/ai.md)**：ロボットボタンやメンションによるスレッド回答、Office・PDF・テキストのファイル添付（サーバー上ディスク非保持）
   - **AIキャンバス**：他者に非公開の個人専用スペースでの推敲・相談、Word対応コピー、チャット入力欄への挿入
@@ -136,7 +136,13 @@ macOS／Linux：
 ./minihub.exe stop -config minihub.json -wait 60s
 ```
 
-バックアップは停止後に、`server.dataDir`が指すデータディレクトリ全体をコピーします。Windowsでは[scripts/backup.bat](scripts/backup.bat)で停止とZIPバックアップを実行できます。スクリプト内のパス設定などは[管理者マニュアルのWindowsバックアップ手順](docs/admin-manual.md#windowsのバックアップ)を参照してください。
+バックアップは**サーバーを停止することなく、稼働中に安全に実行できます**。SQLiteのトランザクション整合性を保ったスナップショットを抽出し、AWS S3へ暗号化アップロードするPowerShellスクリプト [scripts/backup.ps1](scripts/backup.ps1) を提供しています。
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -NoProfile -File scripts/backup.ps1 -BucketName "my-backup-bucket"
+```
+
+単体CLIでのDBスナップショット作成（`minihub backup -config minihub.json -out backup.db`）や、設定・タスクスケジューラ登録・復元の詳細は[管理者マニュアル](docs/admin-manual.md)を参照してください。
 
 設定・運用・復元の詳細は[管理者マニュアル](docs/admin-manual.md)を参照してください。
 

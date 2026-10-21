@@ -17,16 +17,18 @@ minihubの永続化は組み込みSQLiteを使用します。外部DBサーバ�
 
 ### バックアップ
 
-サービス停止後にデータディレクトリ全体をコピーします。DB本体（`minuhub.db`）だけをコピーせず、`storage.json` や残存するWALファイル（`minuhub.db-wal`、`minuhub.db-shm`）などの関連ファイルも含めてください。設定ファイル（`minihub.json`）も別途、アクセスを制限して保管します。
+SQLite の `VACUUM INTO` 機能を活用し、**サーバーを停止することなく稼働中のまま整合性のあるスナップショットを取得**できます。
 
-1. サービスを停止し、プロセスの終了を確認します。macOS／Linuxでは前面起動ならCtrl+C、サービス管理下ならその停止操作を使います。Windowsでは `minihub.exe stop -config minihub.json -wait 60s` を使えます。
-2. データディレクトリ全体と設定ファイルを、データディレクトリの外へバックアップします。
+1. **CLI での取得**:
+   `minihub backup -config minihub.json -out <出力先.db>` を実行します。WAL モードの未チェックポイントデータを含め、単一の整合した SQLite データベースファイルとして抽出されます。サーバーのプロセスロック（`.minihub.lock`）とは競合しません。
+2. **自動化スクリプト**:
+   Windows では [scripts/backup.ps1](../scripts/backup.ps1) を使用することで、ホットバックアップの抽出、マーカー `storage.json` の同封、ZIP 圧縮、AWS S3 への暗号化アップロードまでを一括実行できます。設定ファイル（`minihub.json`）も別途安全に保管してください。
 
-Windowsの停止・ZIPバックアップは [管理者マニュアルの手順](admin-manual.md#windowsのバックアップ) を参照してください。
+詳細は [管理者マニュアルの手順](admin-manual.md#バックアップと復元) を参照してください。
 
 ### 復元
 
-復元時もサービスを停止し、既存データと混ぜずに整合したバックアップ全体を戻します。設定の `server.dataDir` を確認してから起動し、ログインと履歴を確認します。
+復元時はサービスを停止し、空のデータディレクトリにバックアップアーカイブ内の `minuhub.db` と `storage.json` を配置して再起動します。
 
 投稿の物理削除は [削除手順](retention-proposal.md) に従って停止中に実行します。
 

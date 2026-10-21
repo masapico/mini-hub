@@ -224,26 +224,76 @@ minihub自身がHTTPSで待ち受ける場合は、セッションCookieの `Sec
 
 ## バックアップと復元
 
-1. サービスを停止し、書き込みが終わったことを確認します。
-2. 設定の`server.dataDir`が指すデータディレクトリを、ファイルやサブディレクトリを含めて丸ごとコピーします。相対パスは設定ファイルのある場所が基準です。SQLiteではDB本体だけをコピーしないでください。
-3. 復元するときもサービスを停止し、整合したバックアップのデータディレクトリ全体を戻します。既存データと混在させず、設定の保存方式とデータが一致することを確認して起動し、ログインと履歴の表示を確認します。
+SQLite の `VACUUM INTO` を利用し、**サーバーを停止することなく、稼働中のまま安全にトランザクション整合性のあるバックアップスナップショットを取得**できます。
 
-稼働中のファイルをそのままコピーすると不整合になる可能性があります。バックアップからの復元を定期的に試してください。
+### 1. ホットバックアップコマンド (`minihub backup`)
 
-古い投稿の物理削除は、サービス停止中に`minihub retention -config minihub.json -policy`または`-before YYYY-MM-DD`で対象件数を確認し、`-apply`を付けて実行します。実行前にデータディレクトリ全体をバックアップしてください。境界と中断時の再実行方法は[投稿の物理削除](retention-proposal.md)を参照してください。
+minihub には稼働中バックアップ専用のサブコマンドが備わっています。
 
+```powershell
+./minihub.exe backup -config minihub.json -out C:\backup\temp\minuhub.db
+```
 
-### Windowsのバックアップ
+- `-config`：設定ファイルパス（既定値: `minihub.json`）。設定内の `server.dataDir` からソースDBを特定します。
+- `-data`：データディレクトリを明示する場合に指定します（`-config` より優先）。
+- `-out`：出力先SQLiteファイルパス（**必須**）。出力先の親ディレクトリが存在しない場合は自動作成されます。
 
-Windowsでは [backup.bat](../scripts/backup.bat) でサーバーの停止とZIPバックアップを実行できます。冒頭の `EXE`、`CONFIG`、`DATA_DIR`、`BACKUP_DIR` を環境に合わせて編集してください。`DATA_DIR` は設定ファイルの `server.dataDir` と同じ絶対パスにします。
-日本語を含むパスを指定する場合、バッチファイルは ANSI（日本語 Windows では CP932）で保存し、改行コードは CRLF にしてください。LF のまま保存すると cmd.exe が行を誤って解釈します。
+稼働中の WAL ログに記録された未チェックポイントの書き込みデータも含め、単一の完全な `minuhub.db` として抽出されます。
 
-コマンドプロンプトからは `scripts\backup.bat` を実行します。バックアップ後は `minihub.exe -config minihub.json` を手動で起動してください。
+### 2. S3 バックアップスクリプト ([scripts/backup.ps1](../scripts/backup.ps1))
 
-`backup.bat` は `minihub.exe stop -config <設定ファイル> -wait 60s` で停止を待ち、Windows標準の `tar.exe` でデータディレクトリ全体をZIP化します。途中のZIPは `.partial.zip` として作り、検査後に正式名へ変更します。スクリプトはサーバーを再起動しないため、失敗した場合も稼働状態を確認し、必要なら手動で起動してください。既存のバックアップは自動削除しないため、保存期間に応じて別途整理してください。
-`DATA_DIR` がサーバーのデータディレクトリと一致していれば、`server.log` もZIPに含まれます。
+稼働中バックアップの取得から、マーカー `storage.json` の同封、ZIP 圧縮、AWS S3 への暗号化アップロード、一時ファイルのクリーンアップまでを自動化する PowerShell スクリプトを提供しています。
 
-バックアップ先はデータディレクトリの外に置いてください。共有フォルダーなら、バックアップを実行するWindowsアカウントにUNCパスで書き込み権限を与えてください。復元時はサーバーを停止し、ZIP内のデータディレクトリを元の場所へ展開してから手動で起動します。
+```powershell
+powershell.exe -ExecutionPolicy Bypass -NoProfile -File "C:\minihub\scripts\backup.ps1" `
+    -AppDir "C:\minihub" `
+    -ConfigFile "minihub.json" `
+    -BucketName "my-backup-bucket" `
+    -S3Prefix "minihub" `
+    -Region "ap-northeast-1" `
+    -SSE "AES256"
+```
+
+- `-AppDir`：minihub の配置ディレクトリ（既定値: `C:\minihub`）。
+- `-ConfigFile`：設定ファイル名（既定値: `minihub.json`）。
+- `-BucketName`：アップロード先の AWS S3 バケット名。
+- `-S3Prefix`：S3 オブジェクトキーのプレフィックス（既定値: `minihub`）。
+- `-Region`：AWS リージョン（既定値: `ap-northeast-1`）。
+- `-SSE`：暗号化方式。S3 マネージドキーは `AES256`、KMS は `aws:kms`。
+
+処理の進捗と結果はコンソールおよび `logs/backup.log` に追記されます。
+
+#### タスクスケジューラへの登録
+Windows タスクスケジューラで定期自動実行する場合の設定：
+- **全般タブ**:
+  - 「ユーザーがログオンしているかどうかにかかわらず実行する」
+  - **「最上位の特権で実行する」にチェック**
+- **操作タブ**:
+  - プログラム/スクリプト: `powershell.exe`
+  - 引数の追加: `-ExecutionPolicy Bypass -NoProfile -File "C:\minihub\scripts\backup.ps1" -AppDir "C:\minihub" -BucketName "my-backup-bucket"`
+  - 開始: `C:\minihub`
+
+### 3. バックアップからの復元（リストア）手順
+
+バックアップ ZIP アーカイブ内には、整合性スナップショット `minuhub.db` と保存方式マーカー `storage.json` が格納されています。
+
+1. **サーバーの停止**:
+   実行中のターミナルで `Ctrl+C`、または以下のコマンドで停止します。
+   ```powershell
+   ./minihub.exe stop -config minihub.json -wait 60s
+   ```
+2. **既存データの退避**:
+   `server.dataDir`（例: `C:\minihub\data`）の中身を別の場所（例: `C:\minihub\data.bak`）へ退避し、データディレクトリを空にします。
+3. **バックアップアーカイブの展開**:
+   S3 からダウンロードしたバックアップ ZIP（`minihub_YYYYMMDD_HHMMSS.zip`）を展開し、その中の `minuhub.db` と `storage.json` をデータディレクトリへ配置します。
+4. **サーバーの起動**:
+   ```powershell
+   ./minihub.exe -config minihub.json
+   ```
+5. **動作確認**:
+   ブラウザからアクセスし、ユーザーやチャンネル履歴、添付・リアクション等のデータが正しく復元されていることを確認します。
+
+古い投稿の物理削除は、サービス停止中に `minihub retention -config minihub.json -policy` または `-before YYYY-MM-DD` で対象件数を確認し、`-apply` を付けて実行します。実行前にバックアップスクリプト等でスナップショットを必ず取得してください。境界と中断時の再実行方法は[投稿の物理削除](retention-proposal.md)を参照してください。
 
 ## AI連携設定
 

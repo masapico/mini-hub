@@ -22,7 +22,7 @@ func fixture(t *testing.T) (string, []licenseFile) {
 	for name, body := range map[string]string{
 		"release/README.md":          "distribution guide",
 		"minihub.sample.json":        `{"version":1}`,
-		"scripts/backup.bat":         "@echo off\r\n",
+		"scripts/backup.ps1":         "# powershell\r\n",
 		"dependency/LICENSE":         "dependency notice",
 		"minihub.json":               "PRIVATE CONFIG",
 		"data/server.log":            "PRIVATE LOG",
@@ -140,7 +140,7 @@ func TestReleaseContentsAndChecksums(t *testing.T) {
 			"BUILDINFO.txt": fmt.Sprintf("version: %s\ncommit: %s\ndirty: true\ngo: %s\ntarget: %s/%s\ncgo: disabled\n", version, info.commit, info.goVersion, target.os, target.arch),
 		}
 		if target.os == "windows" {
-			want["scripts/backup.bat"] = "@echo off\r\n"
+			want["scripts/backup.ps1"] = "# powershell\r\n"
 		}
 		for relative, body := range want {
 			entry, exists := archive[name+"/"+relative]
