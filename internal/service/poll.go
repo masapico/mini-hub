@@ -178,6 +178,9 @@ func (s *Service) GetPoll(ctx context.Context, user, id string) (PollDetail, err
 		d.Counts[i].OptionID = o.ID
 	}
 	for _, r := range responses {
+		if len(r.OptionIDs) == 0 {
+			continue
+		}
 		d.Respondents++
 		d.TotalVotes += len(r.OptionIDs)
 		if r.UserID == user {
@@ -247,35 +250,53 @@ func (s *Service) VotePoll(ctx context.Context, user, id string, revision int64,
 	if p.Status != "open" || (p.Deadline != nil && !time.Now().Before(*p.Deadline)) {
 		return PollDetail{}, fmt.Errorf("%w: アンケートは終了しました", ErrInvalid)
 	}
-	if len(ids) == 0 || (!p.Multiple && len(ids) != 1) || len(ids) > len(p.Options) {
-		return PollDetail{}, fmt.Errorf("%w: 選択肢を確認してください", ErrInvalid)
-	}
-	seen := map[string]bool{}
-	for _, id := range ids {
-		valid := false
-		for _, o := range p.Options {
-			if o.ID == id {
-				valid = true
-				break
-			}
-		}
-		if !valid || seen[id] {
-			return PollDetail{}, fmt.Errorf("%w: 選択肢を確認してください", ErrInvalid)
-		}
-		seen[id] = true
-	}
 	responses, err := s.storage.ListPollResponses(ctx, id)
 	if err != nil {
 		return PollDetail{}, err
 	}
-	var current int64
+	var currentSeq int64
+	var hasActiveVote bool
 	for _, r := range responses {
 		if r.UserID == user {
-			current = r.Seq
+			currentSeq = r.Seq
+			hasActiveVote = len(r.OptionIDs) > 0
 		}
 	}
-	if current != revision {
-		return PollDetail{}, fmt.Errorf("%w: 回答が更新されています。再読み込みしてください", ErrStale)
+
+	if len(ids) == 0 {
+		if !hasActiveVote {
+			return PollDetail{}, fmt.Errorf("%w: 回答がありません", ErrInvalid)
+		}
+		if currentSeq != revision {
+			return PollDetail{}, fmt.Errorf("%w: 回答が更新されています。再読み込みしてください", ErrStale)
+		}
+	} else {
+		if (!p.Multiple && len(ids) != 1) || len(ids) > len(p.Options) {
+			return PollDetail{}, fmt.Errorf("%w: 選択肢を確認してください", ErrInvalid)
+		}
+		seen := map[string]bool{}
+		for _, id := range ids {
+			valid := false
+			for _, o := range p.Options {
+				if o.ID == id {
+					valid = true
+					break
+				}
+			}
+			if !valid || seen[id] {
+				return PollDetail{}, fmt.Errorf("%w: 選択肢を確認してください", ErrInvalid)
+			}
+			seen[id] = true
+		}
+		if hasActiveVote {
+			if currentSeq != revision {
+				return PollDetail{}, fmt.Errorf("%w: 回答が更新されています。再読み込みしてください", ErrStale)
+			}
+		} else {
+			if revision != 0 && revision != currentSeq {
+				return PollDetail{}, fmt.Errorf("%w: 回答が更新されています。再読み込みしてください", ErrStale)
+			}
+		}
 	}
 	if _, err := s.storage.AddPollResponse(ctx, id, domain.PollResponse{UserID: user, OptionIDs: ids, UpdatedAt: time.Now()}); err != nil {
 		return PollDetail{}, err

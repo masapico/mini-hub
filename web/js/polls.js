@@ -49,8 +49,20 @@ function drawCard(host,d){
   if(p.description)card.append(text("p",p.description,"poll-description"));
   const form=document.createElement("form");form.className="poll-vote-form";
   const selected=new Set(d.myResponse?.optionIds||[]);form.dataset.saved=JSON.stringify(p.options.filter(o=>selected.has(o.id)).map(o=>o.id));for(const o of p.options){const label=document.createElement("label");label.className="poll-choice";const input=document.createElement("input");input.type=p.multiple?"checkbox":"radio";input.name="pollChoice";input.value=o.id;input.checked=selected.has(o.id);input.disabled=!d.canVote||!pollOpen(d);label.append(input,text("span",o.text));form.append(label)}
-  const submit=document.createElement("button");submit.className="btn btn-success btn-sm mt-2";submit.type="submit";submit.textContent=d.myResponse?"回答を変更":"回答する";submit.disabled=!d.canVote||!pollOpen(d);if(d.canVote&&pollOpen(d))form.append(submit);
-  const error=text("div","","text-danger small");form.append(error);form.onsubmit=async e=>{e.preventDefault();const ids=[...form.querySelectorAll("input:checked")].map(x=>x.value);submit.disabled=true;error.textContent="";try{const next=await api("/api/polls/"+encodeURIComponent(p.id)+"/vote",{method:"PUT",body:JSON.stringify({revision:d.myResponse?.seq||0,optionIds:ids})});drawCard(host,next)}catch(err){error.textContent=err.message;submit.disabled=false;if(err.message.includes("更新"))renderCard(host,p.id)}};card.append(form);
+  const btnGroup=document.createElement("div");btnGroup.className="d-flex align-items-center gap-2 mt-2";
+  const submit=document.createElement("button");submit.className="btn btn-success btn-sm";submit.type="submit";submit.textContent=d.myResponse?"回答を変更":"回答する";submit.disabled=!d.canVote||!pollOpen(d);btnGroup.append(submit);
+  if(d.myResponse&&d.canVote&&pollOpen(d)){
+    const clearBtn=text("button","回答を取り消す","btn btn-outline-secondary btn-sm");clearBtn.type="button";
+    clearBtn.onclick=async()=>{
+      if(!confirm("回答を取り消しますか？"))return;
+      submit.disabled=true;clearBtn.disabled=true;error.textContent="";
+      try{const next=await api("/api/polls/"+encodeURIComponent(p.id)+"/vote",{method:"PUT",body:JSON.stringify({revision:d.myResponse.seq,optionIds:[]})});drawCard(host,next);refreshSidebar()}
+      catch(err){error.textContent=err.message;submit.disabled=false;clearBtn.disabled=false;if(err.message.includes("更新"))renderCard(host,p.id)}
+    };
+    btnGroup.append(clearBtn);
+  }
+  if(d.canVote&&pollOpen(d))form.append(btnGroup);
+  const error=text("div","","text-danger small mt-1");form.append(error);form.onsubmit=async e=>{e.preventDefault();const ids=[...form.querySelectorAll("input:checked")].map(x=>x.value);submit.disabled=true;error.textContent="";try{const next=await api("/api/polls/"+encodeURIComponent(p.id)+"/vote",{method:"PUT",body:JSON.stringify({revision:d.myResponse?.seq||0,optionIds:ids})});drawCard(host,next);refreshSidebar()}catch(err){error.textContent=err.message;submit.disabled=false;if(err.message.includes("更新"))renderCard(host,p.id)}};card.append(form);
   const summary=text("div",`回答者 ${d.respondents}人${p.multiple?` · 総選択数 ${d.totalVotes}票`:""}`,"poll-summary");card.append(summary);
   const result=document.createElement("div");result.className="poll-results";for(const [i,o] of p.options.entries()){const c=d.counts[i];const row=document.createElement("div");row.className="poll-result";const line=document.createElement("div");line.className="poll-result-line";line.append(text("span",o.text),text("span",`${c.votes}票 · ${c.percent}%`));const bar=document.createElement("div");bar.className="poll-bar";const fill=document.createElement("div");fill.className="poll-bar-fill";const pct=Math.max(0,Math.min(100,c.percent));fill.style.width=pct+"%";fill.style.opacity=(0.35+(pct/100)*0.65).toFixed(2);bar.append(fill);row.append(line,bar);result.append(row)}card.append(result);
   if(p.multiple)card.append(text("div","複数選択のため割合の合計は100%を超えることがあります。","muted small"));

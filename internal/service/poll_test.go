@@ -131,3 +131,73 @@ func TestPollCreateRetryKeepsOneAnnouncement(t *testing.T) {
 		t.Fatalf("changed retry accepted: %v", err)
 	}
 }
+
+func TestPollClearResponse(t *testing.T) {
+	ctx := context.Background()
+	svc := setup(t)
+	if _, err := svc.CreateChannel(ctx, "admin", domain.Channel{ID: "general", Name: "General", Type: domain.ChannelPublic, Members: []string{"alice", "bob"}}); err != nil {
+		t.Fatal(err)
+	}
+	created, err := svc.CreatePoll(ctx, "alice", service.NewPoll{ChannelID: "general", Question: "どちらを選びますか？", Options: []string{"A", "B"}, Multiple: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := created.Poll.ID
+
+	// 未回答のユーザーがクリア（選択肢0）を送るとエラー
+	if _, err := svc.VotePoll(ctx, "bob", id, 0, []string{}); !errors.Is(err, service.ErrInvalid) {
+		t.Fatalf("expected ErrInvalid for clear without response, got %v", err)
+	}
+
+	// 回答する
+	voted, err := svc.VotePoll(ctx, "bob", id, 0, []string{"o1", "o2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if voted.Respondents != 1 || voted.TotalVotes != 2 || voted.MyResponse == nil {
+		t.Fatalf("unexpected voted summary: %+v", voted)
+	}
+	bobSeq := voted.MyResponse.Seq
+
+	// 古い revision でのクリアは ErrStale
+	if _, err := svc.VotePoll(ctx, "bob", id, bobSeq-1, []string{}); !errors.Is(err, service.ErrStale) {
+		t.Fatalf("expected ErrStale, got %v", err)
+	}
+
+	// 正しい revision で回答を取り消す（クリア）
+	cleared, err := svc.VotePoll(ctx, "bob", id, bobSeq, []string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cleared.Respondents != 0 || cleared.TotalVotes != 0 || cleared.MyResponse != nil {
+		t.Fatalf("expected cleared state, got respondents=%d totalVotes=%d myResponse=%+v", cleared.Respondents, cleared.TotalVotes, cleared.MyResponse)
+	}
+	for i, c := range cleared.Counts {
+		if c.Votes != 0 || c.Percent != 0 {
+			t.Fatalf("expected 0 votes for option %d, got %+v", i, c)
+		}
+	}
+
+	// 別のユーザー（alice）から見ても集計が 0 になっていること
+	aliceView, err := svc.GetPoll(ctx, "alice", id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if aliceView.Respondents != 0 || aliceView.TotalVotes != 0 {
+		t.Fatalf("alice sees incorrect summary after clear: %+v", aliceView)
+	}
+
+	// クリア済みの状態で再度クリアしようとすると ErrInvalid
+	if _, err := svc.VotePoll(ctx, "bob", id, bobSeq, []string{}); !errors.Is(err, service.ErrInvalid) {
+		t.Fatalf("expected ErrInvalid for double clear, got %v", err)
+	}
+
+	// クリア後に revision 0 で再度回答できること
+	revoted, err := svc.VotePoll(ctx, "bob", id, 0, []string{"o1"})
+	if err != nil {
+		t.Fatalf("failed to revote after clear: %v", err)
+	}
+	if revoted.Respondents != 1 || revoted.TotalVotes != 1 || revoted.MyResponse == nil || revoted.Counts[0].Votes != 1 {
+		t.Fatalf("unexpected revoted summary: %+v", revoted)
+	}
+}

@@ -72,7 +72,7 @@ rm -f "$cookie_jar"
 | `GET` | `/api/polls/{id}` | 匿名集計と自分の回答の取得 |
 | `POST` | `/api/polls/{id}/withdraw` | アンケートの取り消し |
 | `POST` | `/api/polls/{id}/restore` | アンケートの取り消しを戻す |
-| `PUT` | `/api/polls/{id}/vote` | 自分の回答の作成・変更（`revision` は前回回答の連番、初回は0） |
+| `PUT` | `/api/polls/{id}/vote` | 自分の回答の作成・変更・取り消し（`revision` は前回回答の連番、初回は0、`optionIds: []` で回答取り消し） |
 | `POST` | `/api/polls/{id}/close` | 作成者または管理者による締切 |
 | `GET` | `/api/schedules?cursor={cursor}&limit=50` | 閲覧可能な予定調整一覧 |
 | `POST` | `/api/schedules` | 予定調整の下書き作成 |
