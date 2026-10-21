@@ -3086,18 +3086,21 @@ realtime = function () {
             );
             const posted = page.messages.find((item) => item.seq === message.seq);
             if (!posted) return;
-            if (mentioned) {
-                if (!selected)
-                    note(
-                        `${channel?.name || message.channelId} であなた宛てのメンションがあります`,
-                    );
-                if (posted.userId !== S.me.id && typeof showOSNotification === "function")
-                    void showOSNotification({
-                        channelId: message.channelId, channelName: channel.name,
-                        seq: posted.seq, mention: true,
-                        body: "あなた宛てのメンションがあります",
-                    });
-            }
+            const mentioned = posted.mentionUserIds?.includes(S.me.id) || mentionsMe(posted.text, posted.ai);
+            if (!selected && mentioned)
+                note(
+                    `${channel?.name || message.channelId} であなた宛てのメンションがあります`,
+                );
+            else if (!selected)
+                note(
+                    `${channel?.name || message.channelId} に新しいメッセージがあります`,
+                );
+            if (posted.userId !== S.me.id && typeof showOSNotification === "function")
+                void showOSNotification({
+                    channelId: message.channelId, channelName: channel.name,
+                    seq: posted.seq, mention: mentioned,
+                    body: mentioned ? "あなた宛てのメンションがあります" : "新しい投稿があります",
+                });
         } catch (_) {}
     };
     socket.onclose = () => {
