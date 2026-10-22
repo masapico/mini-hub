@@ -1690,14 +1690,18 @@ label.channel-membership-row { cursor: pointer; }
     display: inline-block;
     padding: 0 5px;
     border-radius: 4px;
-    background: #e8f0eb;
-    color: #214d44;
+    background: #fffbeb;
+    color: #92400e;
     font-weight: 700;
     white-space: nowrap;
 }
 .mention.me {
-    background: #fbf5e9;
-    color: #8b5d28;
+    background: #fef3c7;
+    color: #78350f;
+}
+.mention.mention-ai {
+    background: #f3e8ff;
+    color: #6b21a8;
 }
 .message.mentioned {
     margin: 2px -10px;

@@ -1033,3 +1033,34 @@ func TestWebhookAdminUIEmbedded(t *testing.T) {
 		}
 	}
 }
+
+
+func TestMentionStylesAndClassNames(t *testing.T) {
+	handler := Handler(testAuthenticator(false))
+
+	chatCSS := request(t, handler, "/css/chat.css").Body.String()
+	for _, expected := range []string{
+		".app .mention { background: #fffbeb; color: #92400e; }",
+		".app .mention.me { background: #fef3c7; color: #78350f; font-weight: 700; }",
+		".app .mention.mention-ai { background: #f3e8ff; color: #6b21a8; }",
+	} {
+		if !strings.Contains(chatCSS, expected) {
+			t.Fatalf("chat.css does not contain expected mention style %q", expected)
+		}
+	}
+
+	appCSS := request(t, handler, "/css/app.css").Body.String()
+	if !strings.Contains(appCSS, ".mention.mention-ai") {
+		t.Fatal("app.css does not contain .mention.mention-ai")
+	}
+
+	appJS := request(t, handler, "/js/app.js").Body.String()
+	if !strings.Contains(appJS, "mention-ai") || !strings.Contains(appJS, "mention-user") {
+		t.Fatal("app.js does not contain mention-ai or mention-user class names")
+	}
+
+	threadJS := request(t, handler, "/js/thread-mentions.js").Body.String()
+	if !strings.Contains(threadJS, "mention-ai") || !strings.Contains(threadJS, "mention-user") {
+		t.Fatal("thread-mentions.js does not contain mention-ai or mention-user class names")
+	}
+}

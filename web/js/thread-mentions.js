@@ -159,11 +159,12 @@ function chooseThreadMention(picker, user) {
     before.selectNodeContents(input);
     before.setEnd(picker.range.startContainer, picker.range.startOffset);
     const prefix = before.toString() && !/[ \t\r\n\v\f]$/.test(before.toString()) ? " " : "";
+    const isAI = user.id.startsWith("ai:");
     const mention = document.createElement("span");
-    mention.className = "mention";
+    mention.className = "mention" + (isAI ? " mention-ai" : " mention-user");
     mention.contentEditable = "false";
     mention.dataset.mentionToken = mentionToken(user.id, user.name);
-    mention.textContent = `@${user.name}`;
+    mention.textContent = (isAI ? "🤖 @" : "@") + user.name;
     mention.title = `@${user.id}`;
     closeThreadMention();
     input.focus({preventScroll: true});

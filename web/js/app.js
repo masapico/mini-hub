@@ -447,7 +447,7 @@ function appendInlineMarkup(root, text, editable = false) {
                 isAI = mention[1] === "ai",
                 id = mention[2],
                 span = document.createElement("span");
-            span.className = "mention" + (isAI ? "" : isGroup ? S.me?.groups?.includes(id) ? " me" : "" : id === S.me?.id ? " me" : "");
+            span.className = "mention" + (isAI ? " mention-ai" : " mention-user" + (isGroup ? S.me?.groups?.includes(id) ? " me" : "" : id === S.me?.id ? " me" : ""));
             span.textContent = (isAI ? "🤖 @" : "@") + (isAI ? S.aiAccounts.find(a => a.id === id)?.name || mention[3] || id : isGroup ? S.groups?.get(id) || mention[3] || id : S.directory?.get(id) || mention[3] || id);
             span.title = "@" + (isAI ? "ai:" : isGroup ? "group:" : "") + id;
             if (editable) {
@@ -655,7 +655,7 @@ function processMarkdownDOM(container) {
                 const isGroup = kind === "group";
                 const isAI = kind === "ai";
                 const span = document.createElement("span");
-                span.className = "mention" + (isAI ? "" : isGroup ? S.me?.groups?.includes(id) ? " me" : "" : id === S.me?.id ? " me" : "");
+                span.className = "mention" + (isAI ? " mention-ai" : " mention-user" + (isGroup ? S.me?.groups?.includes(id) ? " me" : "" : id === S.me?.id ? " me" : ""));
                 span.textContent = (isAI ? "🤖 @" : "@") + (isAI ? S.aiAccounts?.find(a => a.id === id)?.name || label || id : isGroup ? S.groups?.get(id) || label || id : S.directory?.get(id) || label || id);
                 span.title = "@" + (isAI ? "ai:" : isGroup ? "group:" : "") + id;
                 frag.append(span);
@@ -2283,11 +2283,12 @@ function insertMention(id, name, targetEditor = editor) {
         }
     }
 
+    const isAI = id.startsWith("ai:");
     const mention = document.createElement("span");
-    mention.className = "mention";
+    mention.className = "mention" + (isAI ? " mention-ai" : " mention-user");
     mention.contentEditable = "false";
     mention.dataset.mentionToken = mentionToken(id, name);
-    mention.textContent = `@${name}`;
+    mention.textContent = (isAI ? "🤖 @" : "@") + name;
 
     const trailingSpace = document.createTextNode(" ");
 

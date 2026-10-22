@@ -116,9 +116,10 @@
 }
 .app .text,
 .app .message-editor { font-size: var(--fs-md); line-height: 1.65; }
-.app .mine-label,
-.app .mention { background: #e2e8f0; color: #334155; }
-.app .mention.me { background: #fef3c7; color: var(--chat-mention); }
+.app .mine-label { background: #e2e8f0; color: #334155; }
+.app .mention { background: #fffbeb; color: #92400e; }
+.app .mention.me { background: #fef3c7; color: #78350f; font-weight: 700; }
+.app .mention.mention-ai { background: #f3e8ff; color: #6b21a8; }
 .app .mention-option:hover,
 .app .mention-option:focus { background: #f1f5f9; }
 /* Equal geometry for every message state, including keyboard focus. */
