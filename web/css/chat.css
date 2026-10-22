@@ -766,16 +766,18 @@
 .app.canvas-open { grid-template-columns: 248px minmax(280px, 1fr) var(--canvas-width); }
 .ai-canvas-panel { grid-column: 3; grid-row: 1; }
 .ai-canvas-messages { flex: 1; overflow: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; background: var(--bg, #f8fafc); }
-.ai-canvas-msg { display: flex; flex-direction: column; font-size: var(--fs-md); line-height: 1.65; word-break: break-word; transition: box-shadow .15s ease; }
-.ai-canvas-msg.user { align-self: flex-end; max-width: 85%; padding: 10px 14px; background: #eff6ff; color: #1e3a8a; border: 1px solid #bfdbfe; border-radius: 14px 14px 3px 14px; box-shadow: 0 1px 2px rgba(30, 58, 138, 0.05); }
+.ai-canvas-msg { display: flex; flex-direction: column; align-items: stretch; font-size: var(--fs-md); line-height: 1.65; word-break: break-word; transition: box-shadow .15s ease; }
+.ai-canvas-msg.user { align-self: flex-end; align-items: stretch; text-align: left; max-width: 85%; padding: 10px 14px; background: #eff6ff; color: #1e3a8a; border: 1px solid #bfdbfe; border-radius: 14px 14px 3px 14px; box-shadow: 0 1px 2px rgba(30, 58, 138, 0.05); }
 .ai-canvas-msg.user .ai-canvas-msg-meta { color: #2563eb; }
 .ai-canvas-msg.user .ai-canvas-msg-time { color: #60a5fa; }
-.ai-canvas-msg.assistant { align-self: flex-start; max-width: 92%; padding: 12px 16px; background: #ffffff; color: var(--ink, #1e293b); border: 1px solid #e2e8f0; border-radius: 14px 14px 14px 3px; box-shadow: 0 2px 4px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02); }
-.ai-canvas-msg-meta { font-size: var(--fs-xs); color: var(--muted, #64748b); margin-bottom: 6px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ai-canvas-msg.assistant { align-self: flex-start; align-items: stretch; max-width: 92%; padding: 12px 16px; background: #ffffff; color: var(--ink, #1e293b); border: 1px solid #e2e8f0; border-radius: 14px 14px 14px 3px; box-shadow: 0 2px 4px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02); }
+.ai-canvas-msg-meta { font-size: var(--fs-xs); color: var(--muted, #64748b); margin-bottom: 6px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; }
 .ai-canvas-msg-sender { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
 .ai-canvas-role-icon { width: 14px; height: 14px; flex-shrink: 0; }
 .ai-canvas-msg-time { font-size: var(--fs-xs); font-weight: 400; color: #94a3b8; }
-.ai-canvas-msg-body { overflow-wrap: anywhere; }
+.ai-canvas-msg-body { overflow-wrap: anywhere; text-align: left; width: 100%; }
+.ai-canvas-msg.user .ai-canvas-msg-body { white-space: pre-wrap; }
+.ai-canvas-msg.assistant .ai-canvas-msg-body > :not(.markdown-body) { white-space: pre-wrap; }
 /* AI Canvas heading sizing */
 .ai-canvas-msg .markdown-body h1 {
     font-size: 1.15rem;

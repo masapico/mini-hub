@@ -375,7 +375,10 @@
 
         if (!targetInput) return;
         targetInput.focus();
-        if (targetInput.textContent.trim()) {
+        if ("value" in targetInput) {
+            const current = targetInput.value.trim();
+            targetInput.value = current ? current + "\n\n" + text : text;
+        } else if (targetInput.textContent.trim()) {
             targetInput.textContent = targetInput.textContent + "\n\n" + text;
         } else {
             targetInput.textContent = text;
@@ -485,7 +488,7 @@
         const statusEl = $("aiCanvasStatus");
         if (!input || !sendBtn) return;
 
-        const text = input.innerText.trim();
+        const text = (typeof window.editorValue === "function" ? window.editorValue(input) : input.innerText).trim();
         const attachments = State.stagedAttachments || [];
         if (!text && attachments.length === 0) return;
 
@@ -746,6 +749,16 @@
                     handleSend();
                 }
             };
+            input.addEventListener("paste", (e) => {
+                if (typeof window.handleEditorPaste === "function") {
+                    window.handleEditorPaste(e);
+                } else {
+                    e.preventDefault();
+                    const raw = (e.clipboardData || window.clipboardData)?.getData("text/plain") || "";
+                    const clean = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\n+$/, "").replace(/\t/g, "  ");
+                    if (clean) document.execCommand("insertText", false, clean);
+                }
+            });
         }
 
         if (attachBtn && fileInput) {

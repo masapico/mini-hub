@@ -1052,6 +1052,56 @@ function rescueCaretFromNonEditable(root) {
 window.handleMentionEditorBackspaceDelete = handleMentionEditorBackspaceDelete;
 window.rescueCaretFromNonEditable = rescueCaretFromNonEditable;
 
+function sanitizePastedText(text) {
+    if (!text) return "";
+    let clean = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    clean = clean.replace(/\n+$/, "");
+    clean = clean.replace(/\t/g, "  ");
+    return clean;
+}
+
+function handleEditorPaste(event) {
+    event.preventDefault();
+    const raw = event.clipboardData ? event.clipboardData.getData("text/plain") : "";
+    const clean = sanitizePastedText(raw);
+    if (!clean) return;
+
+    const selection = window.getSelection();
+    const target = event.currentTarget || event.target;
+    if (target && selection && (!selection.rangeCount || !target.contains(selection.getRangeAt(0).commonAncestorContainer))) {
+        const range = document.createRange();
+        range.selectNodeContents(target);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+    }
+
+    let inserted = false;
+    try {
+        inserted = document.execCommand("insertText", false, clean);
+    } catch (_) {}
+
+    if (!inserted && target) {
+        const range = selection && selection.rangeCount ? selection.getRangeAt(0) : null;
+        if (range && target.contains(range.commonAncestorContainer)) {
+            range.deleteContents();
+            const textNode = document.createTextNode(clean);
+            range.insertNode(textNode);
+            range.setStartAfter(textNode);
+            range.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(range);
+        } else {
+            target.textContent = (target.textContent || "") + clean;
+        }
+        target.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+}
+
+window.sanitizePastedText = sanitizePastedText;
+window.handleEditorPaste = handleEditorPaste;
+window.editorValue = editorValue;
+
 function installRichEditor(root, {toolbar, limit, sendButton, sync, onInput}) {
     Object.defineProperties(root, {
         value: {
@@ -1090,10 +1140,7 @@ function installRichEditor(root, {toolbar, limit, sendButton, sync, onInput}) {
     root.addEventListener("input", () => { rescueCaretFromNonEditable(root); update(); sync?.(); onInput?.(); });
     root.addEventListener("keyup", () => { rescueCaretFromNonEditable(root); updateFormatButtons(root, toolbar); });
     root.addEventListener("mouseup", () => { rescueCaretFromNonEditable(root); updateFormatButtons(root, toolbar); });
-    root.addEventListener("paste", (event) => {
-        event.preventDefault();
-        document.execCommand("insertText", false, event.clipboardData.getData("text/plain"));
-    });
+    root.addEventListener("paste", handleEditorPaste);
     toolbar.addEventListener("mousedown", (event) => {
         if (event.target.closest("button")) event.preventDefault();
     });
@@ -1181,10 +1228,7 @@ editor.addEventListener("mouseup", () => {
     rescueCaretFromNonEditable(editor);
     updateFormatButtons();
 });
-editor.addEventListener("paste", (event) => {
-    event.preventDefault();
-    document.execCommand("insertText", false, event.clipboardData.getData("text/plain"));
-});
+editor.addEventListener("paste", handleEditorPaste);
 $("attachButton").onclick = () => $("attachFileInput").click();
 $("attachFileInput").onchange = async (event) => {
     const files = Array.from(event.target.files || []);
