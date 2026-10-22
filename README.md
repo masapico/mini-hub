@@ -30,6 +30,7 @@
 - テキスト投稿、スレッド返信、4種類のリアクション（了解・完了・確認中・感謝）
 - メンション、接続状態・オンラインユーザー数の表示、既読・未読、アプリ内通知と任意のOS通知
 - 管理者画面からのAIアカウント設定（モデル、グループ別利用権限、パラメータの即時反映）
+- 外部システム・監視ツールと連携する **Incoming Webhook**（Slack互換ペイロード対応、トークン認証、cURL／PowerShellワンクリック生成）
 - 匿名アンケートの作成・回答・集計
 - ○・△・×で回答する予定調整
 - 管理者によるユーザー・チャンネル・グループ管理
@@ -54,6 +55,36 @@
 自分専用の作業・下書き用スペースです。対話内容は他ユーザーには公開されません。質問や下書きの推敲を行い、Word貼り付け対応のコピーやチャット入力欄へのワンクリック挿入ができます。OfficeやPDFなどのファイル添付にも対応しています。
 
 [![自分専用の作業スペースでAIと推敲・相談できるAIキャンバス画面](docs/images/ai-canvas.png)](docs/images/ai-canvas.png)
+
+## Incoming Webhook（外部連携）
+
+外部の監視システム（Zabbix、Prometheus等）、CI/CDパイプライン（GitHub Actions、Jenkins等）、社内バッチスクリプトなどから、指定したチャンネルへメッセージを自動投稿できるIncoming Webhook機能を提供します。
+
+管理者が画面左下の「Webhook設定」から表示名と投稿先チャンネルを指定して作成すると、専用のWebhook URLと、すぐに試せる `cURL` および `PowerShell` のサンプルコマンドが自動生成され、ワンクリックでコピーできます。
+
+- **Slack互換ペイロード対応**：`{"text": "..."}` や `{"attachments": [{"text": "..."}]}` 形式をサポート。既存のSlack通知スクリプトやツールからの移行・流用が容易です。
+- **プレーンテキスト対応**：`text/plain` 形式での送信にも対応し、シェルスクリプトやログのパイプラインからも手軽に投稿できます。
+- **スレッド返信対応**：リクエストに `threadRootSeq`（起点の連番）を含めることで、特定メッセージのスレッドへ直接返信として通知を投稿できます。
+- **安全な認証とトークン管理**：URL埋め込み形式（`/api/webhooks/{id}/{token}`）および `Authorization: Bearer <token>` や `X-Webhook-Token: <token>` ヘッダーによる認証に対応。トークンはハッシュ化して安全に保存され、管理画面からいつでも即時再生成（旧トークンは即時失効）や有効／無効の切り替えが可能です。
+- **過負荷保護（レート制限）**：Webhookごとに1秒あたり5件、1分あたり60件の送信上限を設け、外部システムの暴走やループによるチャット過負荷を防止します。
+
+### 送信例
+
+cURL（Linux／macOS／WSL）：
+
+```bash
+curl -X POST "http://127.0.0.1:8080/api/webhooks/<WebhookID>/<Token>" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "ビルドおよびデプロイが正常に完了しました。"}'
+```
+
+PowerShell（Windows）：
+
+```powershell
+$body = @{ text = "日次バックアップ処理が正常に完了しました。" } | ConvertTo-Json -Compress
+Invoke-RestMethod -Uri "http://127.0.0.1:8080/api/webhooks/<WebhookID>/<Token>" `
+  -Method Post -ContentType "application/json; charset=utf-8" -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
+```
 
 ## 起動する（Windows／macOS／Linux）
 

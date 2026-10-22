@@ -85,6 +85,14 @@ rm -f "$cookie_jar"
 | `POST` | `/api/schedules/{id}/withdraw` | 公開済み予定調整の取り消し |
 | `POST` | `/api/schedules/{id}/restore` | 予定調整の取り消しを戻す |
 | `PUT` | `/api/schedules/{id}/responses/me` | ログインユーザーの回答保存 |
+| `GET` | `/api/admin/webhooks` | Webhook一覧（管理者のみ） |
+| `POST` | `/api/admin/webhooks` | Webhook作成（管理者のみ） |
+| `GET` | `/api/admin/webhooks/{id}` | Webhook詳細（管理者のみ） |
+| `PUT` | `/api/admin/webhooks/{id}` | Webhook更新（管理者のみ） |
+| `POST` | `/api/admin/webhooks/{id}/regenerate` | Webhookトークン再生成（管理者のみ） |
+| `DELETE` | `/api/admin/webhooks/{id}` | Webhook削除（管理者のみ） |
+| `POST` | `/api/webhooks/{id}/{token}` | Webhookメッセージ投稿（URL認証） |
+| `POST` | `/api/webhooks/{id}` | Webhookメッセージ投稿（ヘッダー認証） |
 | `GET` | `/api/realtime` | WebSocketリアルタイム通知 |
 
 ## 認可とチャンネル管理
@@ -128,3 +136,35 @@ APIは `GET /api/schedules?period=upcoming|past|all` で期間を選べ、省略
 認証済みの`GET /api/ai-accounts`は有効なAIの`[{"id":"assistant","name":"社内アシスタント"}]`を返します。URLや認証情報は含みません。AIメンションは既存の通常投稿・スレッド投稿APIの`text`へ`@ai:<設定ID>`として指定します。投稿APIはAIの完了を待ちません。
 
 外部APIへの依頼・応答形式は[AI連携のHTTP契約](ai.md#openai互換のhttp契約)を参照してください。回答は既存のスレッドAPIから取得でき、投稿の任意項目`ai`でAIのID・表示名、依頼ID、呼び出し投稿ID、依頼者ID、回答／エラーの種別を確認できます。
+
+## Incoming Webhook API
+
+外部システムや監視ツールからの通知を受け付けるエンドポイントです。URLパスにトークンを埋め込む形式（`/api/webhooks/{id}/{token}`）、またはHTTPヘッダー（`Authorization: Bearer <token>` や `X-Webhook-Token: <token>`）で認証します。
+
+### リクエスト形式
+
+- **JSON (`application/json`)**:
+  ```json
+  {
+    "text": "通知メッセージ本文",
+    "threadRootSeq": 42
+  }
+  ```
+  Slack互換の `attachments: [{"text": "..."}]` 形式も解釈されます。`threadRootSeq`（起点の連番）を指定すると対象メッセージへのスレッド返信として投稿されます。
+- **プレーンテキスト (`text/plain`)**:
+  リクエスト本文の文字列がそのままメッセージ本文として投稿されます。
+
+### レスポンス
+
+成功時は `201 Created` と共に投稿されたメッセージ情報が返されます。
+
+```json
+{
+  "id": "...",
+  "seq": 105,
+  "threadRootSeq": 0,
+  "channelId": "..."
+}
+```
+
+Webhookごとに1秒あたり5リクエスト、1分あたり60リクエストのレート制限が適用され、超過時は `429 Too Many Requests` を返します。
