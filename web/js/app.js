@@ -864,6 +864,194 @@ function currentRichEditorRange(root) {
     return root.contains(range.commonAncestorContainer) ? range.cloneRange() : null;
 }
 
+function handleMentionEditorBackspaceDelete(event, root) {
+    if (event.isComposing || event.keyCode === 229) return false;
+    if (event.key !== "Backspace" && event.key !== "Delete") return false;
+
+    const selection = window.getSelection();
+    if (!selection.rangeCount || !selection.isCollapsed) return false;
+
+    const range = selection.getRangeAt(0);
+    if (!root.contains(range.commonAncestorContainer)) return false;
+
+    if (event.key === "Backspace") {
+        let mentionToDelete = null;
+        let nodeToClean = null;
+        const container = range.startContainer;
+        const offset = range.startOffset;
+
+        if (container.nodeType === Node.TEXT_NODE) {
+            if (offset === 0) {
+                let prev = container.previousSibling;
+                while (prev && prev.nodeType === Node.TEXT_NODE && prev.nodeValue === "") {
+                    prev = prev.previousSibling;
+                }
+                if (prev && prev.nodeType === Node.ELEMENT_NODE && prev.classList.contains("mention")) {
+                    mentionToDelete = prev;
+                }
+            } else if (offset === 1 && container.nodeValue === " ") {
+                let prev = container.previousSibling;
+                while (prev && prev.nodeType === Node.TEXT_NODE && prev.nodeValue === "") {
+                    prev = prev.previousSibling;
+                }
+                if (prev && prev.nodeType === Node.ELEMENT_NODE && prev.classList.contains("mention")) {
+                    mentionToDelete = prev;
+                    nodeToClean = container;
+                }
+            }
+        } else if (container.nodeType === Node.ELEMENT_NODE) {
+            if (offset > 0) {
+                let prev = container.childNodes[offset - 1];
+                let idx = offset - 1;
+                while (prev && prev.nodeType === Node.TEXT_NODE && prev.nodeValue === "" && idx > 0) {
+                    idx--;
+                    prev = container.childNodes[idx];
+                }
+                if (prev && prev.nodeType === Node.ELEMENT_NODE && prev.classList.contains("mention")) {
+                    mentionToDelete = prev;
+                }
+            }
+        }
+
+        if (mentionToDelete) {
+            event.preventDefault();
+            const parent = mentionToDelete.parentNode;
+            if (nodeToClean) {
+                nodeToClean.remove();
+            }
+
+            let prevNode = mentionToDelete.previousSibling;
+            while (prevNode && prevNode.nodeType === Node.TEXT_NODE && prevNode.nodeValue === "") {
+                prevNode = prevNode.previousSibling;
+            }
+            let nextNode = mentionToDelete.nextSibling;
+            while (nextNode && nextNode.nodeType === Node.TEXT_NODE && nextNode.nodeValue === "") {
+                nextNode = nextNode.nextSibling;
+            }
+
+            let targetNode = null;
+            let targetOffset = 0;
+
+            if (prevNode && prevNode.nodeType === Node.TEXT_NODE) {
+                targetNode = prevNode;
+                targetOffset = prevNode.nodeValue.length;
+            } else if (nextNode && nextNode.nodeType === Node.TEXT_NODE) {
+                targetNode = nextNode;
+                targetOffset = 0;
+            } else {
+                targetNode = document.createTextNode("");
+                parent.insertBefore(targetNode, mentionToDelete);
+                targetOffset = 0;
+            }
+
+            mentionToDelete.remove();
+
+            const newRange = document.createRange();
+            newRange.setStart(targetNode, targetOffset);
+            newRange.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(newRange);
+
+            root.dispatchEvent(new Event("input", { bubbles: true }));
+            return true;
+        }
+    } else if (event.key === "Delete") {
+        let mentionToDelete = null;
+        const container = range.startContainer;
+        const offset = range.startOffset;
+
+        if (container.nodeType === Node.TEXT_NODE) {
+            if (offset === container.nodeValue.length) {
+                let next = container.nextSibling;
+                while (next && next.nodeType === Node.TEXT_NODE && next.nodeValue === "") {
+                    next = next.nextSibling;
+                }
+                if (next && next.nodeType === Node.ELEMENT_NODE && next.classList.contains("mention")) {
+                    mentionToDelete = next;
+                }
+            }
+        } else if (container.nodeType === Node.ELEMENT_NODE) {
+            if (offset < container.childNodes.length) {
+                let next = container.childNodes[offset];
+                let idx = offset;
+                while (next && next.nodeType === Node.TEXT_NODE && next.nodeValue === "" && idx + 1 < container.childNodes.length) {
+                    idx++;
+                    next = container.childNodes[idx];
+                }
+                if (next && next.nodeType === Node.ELEMENT_NODE && next.classList.contains("mention")) {
+                    mentionToDelete = next;
+                }
+            }
+        }
+
+        if (mentionToDelete) {
+            event.preventDefault();
+            const parent = mentionToDelete.parentNode;
+            let nextNode = mentionToDelete.nextSibling;
+            while (nextNode && nextNode.nodeType === Node.TEXT_NODE && nextNode.nodeValue === "") {
+                nextNode = nextNode.nextSibling;
+            }
+            let prevNode = mentionToDelete.previousSibling;
+            while (prevNode && prevNode.nodeType === Node.TEXT_NODE && prevNode.nodeValue === "") {
+                prevNode = prevNode.previousSibling;
+            }
+
+            let targetNode = null;
+            let targetOffset = 0;
+
+            if (nextNode && nextNode.nodeType === Node.TEXT_NODE) {
+                targetNode = nextNode;
+                targetOffset = 0;
+            } else if (prevNode && prevNode.nodeType === Node.TEXT_NODE) {
+                targetNode = prevNode;
+                targetOffset = prevNode.nodeValue.length;
+            } else {
+                targetNode = document.createTextNode("");
+                parent.insertBefore(targetNode, mentionToDelete);
+                targetOffset = 0;
+            }
+
+            mentionToDelete.remove();
+
+            const newRange = document.createRange();
+            newRange.setStart(targetNode, targetOffset);
+            newRange.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(newRange);
+
+            root.dispatchEvent(new Event("input", { bubbles: true }));
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function rescueCaretFromNonEditable(root) {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    if (!root.contains(range.commonAncestorContainer)) return;
+
+    let node = range.startContainer;
+    const mention = (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement)?.closest?.(".mention");
+    if (mention && root.contains(mention)) {
+        let target = mention.nextSibling;
+        if (!target || target.nodeType !== Node.TEXT_NODE) {
+            target = document.createTextNode("");
+            mention.parentNode?.insertBefore(target, mention.nextSibling);
+        }
+        const newRange = document.createRange();
+        newRange.setStart(target, 0);
+        newRange.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+    }
+}
+
+window.handleMentionEditorBackspaceDelete = handleMentionEditorBackspaceDelete;
+window.rescueCaretFromNonEditable = rescueCaretFromNonEditable;
+
 function installRichEditor(root, {toolbar, limit, sendButton, sync, onInput}) {
     Object.defineProperties(root, {
         value: {
@@ -896,9 +1084,12 @@ function installRichEditor(root, {toolbar, limit, sendButton, sync, onInput}) {
         for (const button of toolbar.querySelectorAll("button"))
             if (button !== sendButton && button.id !== "threadAttachButton" && button.id !== "attachButton") button.disabled = root.disabled;
     };
-    root.addEventListener("input", () => { update(); sync?.(); onInput?.(); });
-    root.addEventListener("keyup", () => updateFormatButtons(root, toolbar));
-    root.addEventListener("mouseup", () => updateFormatButtons(root, toolbar));
+    root.addEventListener("keydown", (event) => {
+        if (handleMentionEditorBackspaceDelete(event, root)) return;
+    });
+    root.addEventListener("input", () => { rescueCaretFromNonEditable(root); update(); sync?.(); onInput?.(); });
+    root.addEventListener("keyup", () => { rescueCaretFromNonEditable(root); updateFormatButtons(root, toolbar); });
+    root.addEventListener("mouseup", () => { rescueCaretFromNonEditable(root); updateFormatButtons(root, toolbar); });
     root.addEventListener("paste", (event) => {
         event.preventDefault();
         document.execCommand("insertText", false, event.clipboardData.getData("text/plain"));
@@ -962,6 +1153,7 @@ async function send() {
 }
 $("send").onclick = send;
 $("input").onkeydown = (e) => {
+    if (handleMentionEditorBackspaceDelete(e, editor)) return;
     if (e.ctrlKey && e.key === "Enter") {
         e.preventDefault();
         send();
@@ -977,9 +1169,18 @@ document
 document.querySelector(".tools").addEventListener("mousedown", (event) => {
     if (event.target.closest("button")) event.preventDefault();
 });
-editor.addEventListener("input", syncEditorState);
-editor.addEventListener("keyup", () => updateFormatButtons());
-editor.addEventListener("mouseup", () => updateFormatButtons());
+editor.addEventListener("input", () => {
+    rescueCaretFromNonEditable(editor);
+    syncEditorState();
+});
+editor.addEventListener("keyup", () => {
+    rescueCaretFromNonEditable(editor);
+    updateFormatButtons();
+});
+editor.addEventListener("mouseup", () => {
+    rescueCaretFromNonEditable(editor);
+    updateFormatButtons();
+});
 editor.addEventListener("paste", (event) => {
     event.preventDefault();
     document.execCommand("insertText", false, event.clipboardData.getData("text/plain"));
@@ -2011,26 +2212,55 @@ function renderMentionMenu(query = "") {
         options.innerHTML =
             '<span class="muted mention-empty">候補がありません</span>';
 }
-function insertMention(id, name) {
-    const range = S.mentionRange || currentEditorRange();
+function insertMention(id, name, targetEditor = editor) {
+    const range = S.mentionRange || currentRichEditorRange(targetEditor);
     if (!range) return;
     range.deleteContents();
-    const mention = document.createElement("span"),
-        space = document.createTextNode(" ");
+
+    let needsPrefixSpace = false;
+    const container = range.startContainer;
+    const offset = range.startOffset;
+    if (container.nodeType === Node.TEXT_NODE) {
+        if (offset > 0) {
+            const charBefore = container.nodeValue.charAt(offset - 1);
+            if (!/[ \t\r\n\v\f\u200B]/.test(charBefore)) {
+                needsPrefixSpace = true;
+            }
+        }
+    } else if (container.nodeType === Node.ELEMENT_NODE && offset > 0) {
+        const prev = container.childNodes[offset - 1];
+        if (prev?.nodeType === Node.TEXT_NODE && prev.nodeValue.length > 0) {
+            const charBefore = prev.nodeValue.slice(-1);
+            if (!/[ \t\r\n\v\f\u200B]/.test(charBefore)) {
+                needsPrefixSpace = true;
+            }
+        }
+    }
+
+    const mention = document.createElement("span");
     mention.className = "mention";
     mention.contentEditable = "false";
     mention.dataset.mentionToken = mentionToken(id, name);
     mention.textContent = `@${name}`;
-    range.insertNode(space);
+
+    const trailingSpace = document.createTextNode(" ");
+
+    range.insertNode(trailingSpace);
     range.insertNode(mention);
-    range.setStartAfter(space);
+    if (needsPrefixSpace) {
+        range.insertNode(document.createTextNode(" "));
+    }
+
+    range.setStart(trailingSpace, 1);
     range.collapse(true);
+
     const selection = window.getSelection();
     selection.removeAllRanges();
     selection.addRange(range);
+
     S.mentionRange = null;
-    editor.focus();
-    editor.dispatchEvent(new Event("input", { bubbles: true }));
+    targetEditor.focus();
+    targetEditor.dispatchEvent(new Event("input", { bubbles: true }));
 }
 function openMainMention(kind) {
     if (editor.disabled) return;
@@ -2043,6 +2273,12 @@ function openMainMention(kind) {
         if (kind !== "ai") openMainMentionPresence();
         $("aiButton").setAttribute("aria-expanded", String(kind === "ai"));
         S.mentionRange = currentEditorRange();
+        if (!S.mentionRange) {
+            const range = document.createRange();
+            range.selectNodeContents(editor);
+            range.collapse(false);
+            S.mentionRange = range;
+        }
         $("mentionSearch").value = "";
         renderMentionMenu();
         requestAnimationFrame(() => $("mentionSearch").focus());
@@ -2071,30 +2307,28 @@ function currentEditorRange() {
     return currentRichEditorRange(editor);
 }
 
-function textBeforeCaret() {
-    const range = currentEditorRange();
-    if (!range) return "";
-    const before = range.cloneRange();
-    before.selectNodeContents(editor);
-    before.setEnd(range.endContainer, range.endOffset);
-    return before.toString();
+function typedEditorMention(root = editor) {
+    const caret = currentRichEditorRange(root);
+    if (!caret?.collapsed || caret.endContainer.nodeType !== Node.TEXT_NODE) return null;
+    const before = caret.endContainer.nodeValue.slice(0, caret.endOffset);
+    const match = before.match(/(?:^|\s)@([^\s@（）]*)$/u);
+    if (!match) return null;
+    const range = caret.cloneRange();
+    range.setStart(caret.endContainer, caret.endOffset - match[1].length - 1);
+    return { range, query: match[1] };
 }
 
 $("input").addEventListener("input", () => {
-    const before = textBeforeCaret(),
-        match = before.match(/(?:^|\s)@([^\s@]*)$/u);
-    if (!match) {
+    const typed = typedEditorMention(editor);
+    if (!typed) {
         if (S.mentionRange)
             closeMainMentionMenu();
         S.mentionRange = null;
         return;
     }
-    const selection = window.getSelection(), range = selection.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
-    if (!range) return;
-    range.setStart(range.endContainer, Math.max(0, range.endOffset - match[1].length - 1));
-    S.mentionRange = range;
-    S.mentionKind = match[1].startsWith("ai:") ? "ai" : "user";
-    const query = S.mentionKind === "ai" ? match[1].slice(3) : match[1];
+    S.mentionRange = typed.range;
+    S.mentionKind = typed.query.startsWith("ai:") ? "ai" : "user";
+    const query = S.mentionKind === "ai" ? typed.query.slice(3) : typed.query;
     $("mentionSearch").value = query;
     renderMentionMenu(query);
     $("mentionMenu").classList.remove("hidden");

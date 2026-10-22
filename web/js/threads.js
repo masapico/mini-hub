@@ -604,6 +604,7 @@ $("threadInput").oninput=()=>{const t=T.current;if(t)T.drafts.set(threadKey(t.ch
 $("threadInput").onfocus=updateOwnTyping;
 $("threadInput").onblur=()=>{if(S.typingScope?.threadRootSeq)stopTyping();};
 $("threadInput").onkeydown=e=>{
+    if (typeof handleMentionEditorBackspaceDelete === "function" && handleMentionEditorBackspaceDelete(e, $("threadInput"))) return;
     if (typeof handleThreadMentionKey === "function" && handleThreadMentionKey(e)) return;
     if((e.ctrlKey||e.metaKey)&&e.key==="Enter"&&!e.isComposing){e.preventDefault();$("threadForm").requestSubmit();return;}
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="b"){

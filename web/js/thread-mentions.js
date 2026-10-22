@@ -178,7 +178,7 @@ function chooseThreadMention(picker, user) {
         picker.range.insertNode(space);
         picker.range.insertNode(mention);
         if (prefix) picker.range.insertNode(document.createTextNode(prefix));
-        picker.range.setStartAfter(space);
+        picker.range.setStart(space, 1);
         picker.range.collapse(true);
         selection.removeAllRanges();
         selection.addRange(picker.range);
