@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -425,3 +426,80 @@ func TestMultipleAIMentionsRejected(t *testing.T) {
 	}
 }
 
+
+
+func TestDirectAICallSlidingWindow(t *testing.T) {
+	s, ctx, user, _ := setupTestService(t)
+
+	var receivedMessages []map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Messages []map[string]any `json:"messages"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		receivedMessages = req.Messages
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{
+					"message": map[string]any{
+						"role":    "assistant",
+						"content": "AI reply",
+					},
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	account := domain.AIAccount{
+		ID:      "window-ai",
+		Name:    "Window AI",
+		Enabled: true,
+		URL:     server.URL,
+		Model:   "test-model",
+	}
+	if err := s.storage.SaveAIAccount(ctx, &account); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.StartAI(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
+	defer s.CloseAI()
+
+	s.SetAICanvasOptions(true, 0)
+
+	// Send 15 messages (more than sliding window limit of 10)
+	var inputMsgs []domain.AIDirectMessage
+	for i := 1; i <= 15; i++ {
+		inputMsgs = append(inputMsgs, domain.AIDirectMessage{
+			Role:    "user",
+			Content: fmt.Sprintf("Message %d", i),
+		})
+	}
+
+	resp, err := s.DirectAICall(ctx, user, domain.AIDirectRequest{
+		AIAccountID: "window-ai",
+		Messages:    inputMsgs,
+	})
+	if err != nil {
+		t.Fatalf("DirectAICall failed: %v", err)
+	}
+	if resp.Reply != "AI reply" {
+		t.Fatalf("unexpected reply: %s", resp.Reply)
+	}
+
+	if len(receivedMessages) != 10 {
+		t.Fatalf("expected 10 messages received by LLM, got %d", len(receivedMessages))
+	}
+	// Verify that received messages are Message 6 through Message 15
+	firstReceived := receivedMessages[0]["content"]
+	if firstReceived != "Message 6" {
+		t.Fatalf("expected first received message to be 'Message 6', got '%v'", firstReceived)
+	}
+	lastReceived := receivedMessages[9]["content"]
+	if lastReceived != "Message 15" {
+		t.Fatalf("expected last received message to be 'Message 15', got '%v'", lastReceived)
+	}
+}

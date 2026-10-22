@@ -119,12 +119,74 @@ body.thread-col-resizing { cursor:col-resize !important; user-select:none !impor
 .ai-canvas-account-bar { font-size: var(--fs-sm); }
 
 /* AI canvas composer: input first, attach/send on the row directly below it. */
-.ai-canvas-composer .thread-editor-box { display: flex; flex-direction: column; }
-.ai-canvas-composer .thread-tools { order: 3; border-bottom: 0; border-top: 1px solid var(--line); border-radius: 0 0 9px 9px; }
-.ai-canvas-composer .thread-message-editor { order: 2; min-height: 84px; max-height: 200px; border-radius: 9px 9px 0 0; }
+.ai-canvas-composer .thread-editor-box {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden !important;
+}
+.ai-canvas-composer .thread-tools {
+    order: 3;
+    border-bottom: 0 !important;
+    border-top: 1px solid var(--dads-border-subtle, var(--line)) !important;
+    border-radius: 0 0 calc(var(--dads-radius-lg, 8px) - 1px) calc(var(--dads-radius-lg, 8px) - 1px) !important;
+    margin-bottom: 0 !important;
+}
+.ai-canvas-composer .thread-message-editor {
+    order: 2;
+    min-height: 84px;
+    max-height: 200px;
+    border-radius: calc(var(--dads-radius-lg, 8px) - 1px) calc(var(--dads-radius-lg, 8px) - 1px) 0 0 !important;
+}
 .ai-canvas-composer .attached-files { order: 1; }
-.ai-canvas-composer .thread-message-editor:focus { outline: 0; }
-.ai-canvas-composer .thread-editor-box:focus-within { border-color: #7c3aed; box-shadow: 0 0 0 2px #ede9fe; }
+.ai-canvas-composer .thread-message-editor:focus { outline: 0 !important; }
+.ai-canvas-composer .thread-editor-box:focus-within {
+    border-color: #7c3aed !important;
+    box-shadow: 0 0 0 2px #ede9fe !important;
+}
+.ai-canvas-composer .thread-editor-box:focus-within .thread-tools {
+    border-bottom: 0 !important;
+    border-top: 1px solid #ddd6fe !important;
+    margin-bottom: 0 !important;
+    background-color: #faf5ff !important;
+}
+
+/* AI canvas toolbar center hint & status */
+.ai-canvas-tools-center {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    overflow: hidden;
+}
+.ai-canvas-hint-inline {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2px 4px;
+    font-size: 0.72rem;
+    color: var(--muted, #64748b);
+    line-height: 1.25;
+    text-align: center;
+    cursor: default;
+    user-select: none;
+}
+.ai-canvas-hint-inline span {
+    white-space: nowrap;
+}
+.ai-canvas-hint-sep {
+    color: #cbd5e1;
+}
+.ai-canvas-tools-center .editor-limit {
+    font-size: var(--fs-xs);
+    color: #7c3aed;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
 /* AI思考中・回答生成中インジケーター */
 .ai-thinking-indicator {

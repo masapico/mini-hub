@@ -118,6 +118,34 @@
         }
     }
 
+    function formatFileSize(bytes) {
+        if (bytes == null || isNaN(bytes)) return "";
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    function renderMsgAttachments(attachments) {
+        if (!attachments || !attachments.length) return null;
+        const container = document.createElement("div");
+        container.className = "ai-canvas-attachments";
+        attachments.forEach(att => {
+            const item = document.createElement("div");
+            item.className = "ai-canvas-attachment-item";
+            const icon = window.svgIcon ? window.svgIcon("paperclip") : document.createTextNode("📎");
+            const name = document.createElement("span");
+            name.className = "ai-canvas-attachment-name";
+            name.textContent = att.name || "添付ファイル";
+            const size = document.createElement("span");
+            size.className = "ai-canvas-attachment-size";
+            const formattedSize = formatFileSize(att.size);
+            if (formattedSize) size.textContent = `(${formattedSize})`;
+            item.append(icon, name, size);
+            container.append(item);
+        });
+        return container;
+    }
+
     function convertMarkdownToWordHtml(markdownText) {
         if (!markdownText) return "";
         let html = "";
@@ -291,7 +319,13 @@
                 body.textContent = msg.content;
             }
         } else {
-            body.textContent = msg.content;
+            if (msg.content) {
+                body.textContent = msg.content;
+            }
+            if (msg.attachments && msg.attachments.length) {
+                const attsEl = renderMsgAttachments(msg.attachments);
+                if (attsEl) body.append(attsEl);
+            }
         }
         wrap.append(body);
 
@@ -356,7 +390,7 @@
         if (State.messages.length === 0) {
             const welcome = document.createElement("div");
             welcome.className = "ai-canvas-welcome p-3 text-muted small";
-            welcome.innerHTML = `<p class="mb-1">自分専用の作業・下書き用キャンバスです。ここでの対話は他ユーザーには公開されません。</p><p class="mb-0">下書きの推敲や質問を行い、「コピー」や「入力欄に挿入」でチームチャットに活用できます。</p>`;
+            welcome.innerHTML = `<p class="mb-1">自分専用の作業用キャンバスです。ここでの対話は他ユーザーには公開されません。</p><p class="mb-0">AIに質問を行い、「コピー」や「入力欄に挿入」で文書作成・チャットに活用できます。</p>`;
             container.append(welcome);
             return;
         }
@@ -486,6 +520,7 @@
         const input = $("aiCanvasInput");
         const sendBtn = $("aiCanvasSend");
         const statusEl = $("aiCanvasStatus");
+        const hintEl = $("aiCanvasHintText");
         if (!input || !sendBtn) return;
 
         const text = (typeof window.editorValue === "function" ? window.editorValue(input) : input.innerText).trim();
@@ -503,7 +538,13 @@
         const accountName = selectedAccount?.name || accountID;
 
         // User message
-        const userMsg = { role: "user", content: text, ts: new Date().toISOString() };
+        const attachmentsMeta = attachments.map(a => ({ name: a.name, size: a.size }));
+        const userMsg = {
+            role: "user",
+            content: text,
+            attachments: attachmentsMeta.length > 0 ? attachmentsMeta : undefined,
+            ts: new Date().toISOString(),
+        };
         State.messages.push(userMsg);
 
         // Thinking placeholder for assistant
@@ -524,11 +565,18 @@
         input.contentEditable = "false";
         sendBtn.disabled = true;
         sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>送信中…';
-        if (statusEl) statusEl.textContent = "AIが回答を生成しています…";
+        if (hintEl) hintEl.classList.add("hidden");
+        if (statusEl) {
+            statusEl.textContent = "AIが回答を生成しています…";
+            statusEl.classList.remove("hidden");
+        }
 
         try {
             // Prepare messages payload for sliding window (excluding errors and temporary thinking)
-            const payloadMessages = State.messages.filter(m => !m.error && !m.thinking).map(m => ({
+            // Up to the last 10 messages to match server-side sliding window
+            const validMessages = State.messages.filter(m => !m.error && !m.thinking);
+            const recentMessages = validMessages.slice(-10);
+            const payloadMessages = recentMessages.map(m => ({
                 role: m.role,
                 content: m.content,
             }));
@@ -591,7 +639,11 @@
             input.contentEditable = "true";
             sendBtn.disabled = false;
             sendBtn.textContent = "送信";
-            if (statusEl) statusEl.textContent = "";
+            if (statusEl) {
+                statusEl.textContent = "";
+                statusEl.classList.add("hidden");
+            }
+            if (hintEl) hintEl.classList.remove("hidden");
             input.focus();
         }
     }

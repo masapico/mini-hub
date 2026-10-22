@@ -810,6 +810,44 @@
 .ai-canvas-action-btn:hover { background: #e2e8f0; border-color: #94a3b8; color: #0f172a; }
 .ai-canvas-action-btn.copied { background: #f0fdf4; border-color: #86efac; color: #166534; font-weight: 600; }
 .ai-canvas-action-btn svg { width: 13px; height: 13px; }
+.ai-canvas-attachments {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 6px;
+    max-width: 100%;
+}
+.ai-canvas-msg.user .ai-canvas-attachments:first-child {
+    margin-top: 0;
+}
+.ai-canvas-attachment-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid #bfdbfe;
+    border-radius: 6px;
+    font-size: var(--fs-xs);
+    color: #1e40af;
+    max-width: fit-content;
+    word-break: break-all;
+}
+.ai-canvas-attachment-item svg {
+    width: 13px;
+    height: 13px;
+    color: #2563eb;
+    flex-shrink: 0;
+}
+.ai-canvas-attachment-name {
+    font-weight: 500;
+}
+.ai-canvas-attachment-size {
+    font-size: 0.72rem;
+    color: #3b82f6;
+    margin-left: 2px;
+}
+
 /* Overlay mode. Selectors are `.app …` on purpose: threads.css loads later and sets
    `.thread-panel { position: relative }`, which would otherwise win over these rules. */
 @media(max-width: 1280px) {
