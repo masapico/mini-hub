@@ -69,6 +69,7 @@ type Attachment struct {
 
 type Message struct {
 	AI             *AIMessage         `json:"ai,omitempty"`
+	Webhook        *WebhookMessageInfo `json:"webhook,omitempty"`
 	WithdrawnAt    *time.Time         `json:"withdrawnAt,omitempty"`
 	WithdrawnBy    string             `json:"withdrawnBy,omitempty"`
 	WithdrawnKind  string             `json:"withdrawnKind,omitempty"`
@@ -109,6 +110,24 @@ type AIAccount struct {
 	Temperature  *float64 `json:"temperature,omitempty"`
 	TopP         *float64 `json:"topP,omitempty"`
 	MaxTokens    *int     `json:"maxTokens,omitempty"`
+}
+
+type WebhookMessageInfo struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type Webhook struct {
+	Version     int        `json:"version"`
+	ID          string     `json:"id"`
+	ChannelID   string     `json:"channelId"`
+	Name        string     `json:"name"`
+	Description string     `json:"description,omitempty"`
+	TokenHash   string     `json:"tokenHash,omitempty"`
+	Enabled     bool       `json:"enabled"`
+	CreatedBy   string     `json:"createdBy"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	LastUsedAt  *time.Time `json:"lastUsedAt,omitempty"`
 }
 
 type Withdrawal struct {

@@ -16,15 +16,15 @@ import (
 	"time"
 )
 
-const messageColumns = `seq,id,ts,user_id,text,root,mention_ids,schedule_id,schedule_event,poll_id,ai,attachments`
+const messageColumns = `seq,id,ts,user_id,text,root,mention_ids,schedule_id,schedule_event,poll_id,ai,attachments,webhook`
 
 type scanner interface{ Scan(...any) error }
 
 func scanMessage(row scanner) (domain.Message, error) {
 	var m domain.Message
 	var ts string
-	var mentions, sch, event, poll, ai, attachments sql.NullString
-	err := row.Scan(&m.Seq, &m.ID, &ts, &m.UserID, &m.Text, &m.ThreadRootSeq, &mentions, &sch, &event, &poll, &ai, &attachments)
+	var mentions, sch, event, poll, ai, attachments, webhook sql.NullString
+	err := row.Scan(&m.Seq, &m.ID, &ts, &m.UserID, &m.Text, &m.ThreadRootSeq, &mentions, &sch, &event, &poll, &ai, &attachments, &webhook)
 	if err != nil {
 		return m, missing(err)
 	}
@@ -53,6 +53,11 @@ func scanMessage(row scanner) (domain.Message, error) {
 			return m, err
 		}
 	}
+	if webhook.Valid {
+		if err = json.Unmarshal([]byte(webhook.String), &m.Webhook); err != nil {
+			return m, err
+		}
+	}
 	return m, nil
 }
 
@@ -65,7 +70,14 @@ func insertMessage(ctx context.Context, tx *sql.Tx, ch string, m domain.Message)
 	if m.Seq < 1 || m.Text == "" || m.Timestamp.IsZero() || m.ThreadRootSeq < 0 || m.ThreadRootSeq >= m.Seq {
 		return errors.New("invalid message")
 	}
-	var mentions, sch, event, poll, ai, attachments any
+	var mentions, sch, event, poll, ai, attachments, webhook any
+	if m.Webhook != nil {
+		b, err := json.Marshal(m.Webhook)
+		if err != nil {
+			return err
+		}
+		webhook = string(b)
+	}
 	if m.AI != nil {
 		b, err := json.Marshal(m.AI)
 		if err != nil {
@@ -103,7 +115,7 @@ func insertMessage(ctx context.Context, tx *sql.Tx, ch string, m domain.Message)
 		}
 		poll = m.PollRef.ID
 	}
-	_, err := tx.ExecContext(ctx, `INSERT INTO messages(channel_id,seq,id,ts,ts_ns,user_id,text,root,mention_ids,schedule_id,schedule_event,poll_id,ai,attachments) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, ch, m.Seq, m.ID, m.Timestamp.Format(time.RFC3339Nano), m.Timestamp.UnixNano(), m.UserID, m.Text, m.ThreadRootSeq, mentions, sch, event, poll, ai, attachments)
+	_, err := tx.ExecContext(ctx, `INSERT INTO messages(channel_id,seq,id,ts,ts_ns,user_id,text,root,mention_ids,schedule_id,schedule_event,poll_id,ai,attachments,webhook) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, ch, m.Seq, m.ID, m.Timestamp.Format(time.RFC3339Nano), m.Timestamp.UnixNano(), m.UserID, m.Text, m.ThreadRootSeq, mentions, sch, event, poll, ai, attachments, webhook)
 	if err != nil {
 		return err
 	}

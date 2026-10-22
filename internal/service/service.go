@@ -28,6 +28,7 @@ var (
 	ErrInvalid         = errors.New("invalid request")
 	ErrQuotaExceeded   = errors.New("daily AI quota exceeded")
 	ErrAIUnavailable   = errors.New("ai service unavailable")
+	ErrRateLimited     = errors.New("rate limit exceeded")
 )
 
 const MaxMessageBytes = 16 * 1024
@@ -124,6 +125,7 @@ type Service struct {
 	ai                  *aiDispatcher
 	storage             storage.Storage
 	attachmentMgr       *AttachmentManager
+	webhookLimiter      *webhookRateLimiter
 	pollMu              sync.Mutex
 	mu                  sync.Mutex
 	userMu              sync.Mutex
@@ -167,6 +169,7 @@ func NewWithOptions(store storage.Storage, selfPasswordChange bool, mentionReten
 	return &Service{
 		storage:             store,
 		attachmentMgr:       newAttachmentManager(),
+		webhookLimiter:      newWebhookRateLimiter(),
 		locks:               make(map[string]*sync.Mutex),
 		presenceMembers:     make(map[string][]string),
 		selfPasswordChange:  selfPasswordChange,

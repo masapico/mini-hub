@@ -999,3 +999,37 @@ func request(t *testing.T, handler http.Handler, path string) *httptest.Response
 	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
 	return recorder
 }
+
+func TestWebhookAdminUIEmbedded(t *testing.T) {
+	html := request(t, Handler(testAuthenticator(true)), "/").Body.String()
+	for _, expected := range []string{
+		`id="webhookSettings"`,
+		`id="webhookModal"`,
+		`id="webhookSearch"`,
+		`id="webhookCreatedNotice"`,
+		`id="copyWebhookURL"`,
+		`id="copyWebhookCurl"`,
+		`id="copyWebhookPowershell"`,
+	} {
+		if !strings.Contains(html, expected) {
+			t.Fatalf("index HTML does not contain expected webhook element %q", expected)
+		}
+	}
+
+	appScript := request(t, Handler(testAuthenticator(false)), "/js/app.js").Body.String()
+	if !strings.Contains(appScript, "message.webhook") {
+		t.Fatal("app.js does not handle message.webhook")
+	}
+
+	adminScript := request(t, Handler(testAuthenticator(false)), "/js/admin.js").Body.String()
+	for _, expected := range []string{
+		"loadManagedWebhooks",
+		"displayCreatedWebhookNotice",
+		"copyWebhookCurl",
+		"copyWebhookPowershell",
+	} {
+		if !strings.Contains(adminScript, expected) {
+			t.Fatalf("admin.js does not contain %q", expected)
+		}
+	}
+}

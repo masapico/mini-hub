@@ -83,7 +83,7 @@ func Open(path string) (_ *Store, err error) {
 	if err = w.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return nil, err
 	}
-	if version < 0 || version > 7 {
+	if version < 0 || version > 8 {
 		return nil, fmt.Errorf("unsupported SQLite schema version %d", version)
 	}
 	var mode string
@@ -210,6 +210,30 @@ PRAGMA user_version=7;`); err != nil {
 			return nil, err
 		}
 	}
+	if version >= 1 && version <= 7 {
+		tx, e := w.Begin()
+		if e != nil {
+			return nil, e
+		}
+		defer tx.Rollback()
+		var hasWebhook int
+		if err = tx.QueryRow("SELECT count(*) FROM pragma_table_info('messages') WHERE name='webhook'").Scan(&hasWebhook); err != nil {
+			return nil, err
+		}
+		if hasWebhook == 0 {
+			if _, err = tx.Exec("ALTER TABLE messages ADD COLUMN webhook TEXT CHECK(webhook IS NULL OR json_valid(webhook))"); err != nil {
+				return nil, err
+			}
+		}
+		if _, err = tx.Exec(`CREATE TABLE IF NOT EXISTS webhooks(id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, data TEXT NOT NULL CHECK(json_valid(data)));
+CREATE INDEX IF NOT EXISTS webhooks_channel ON webhooks(channel_id);
+PRAGMA user_version=8;`); err != nil {
+			return nil, err
+		}
+		if err = tx.Commit(); err != nil {
+			return nil, err
+		}
+	}
 	q.Add("_pragma", "query_only(1)")
 	u.RawQuery = q.Encode()
 	s.read, err = sql.Open("sqlite", u.String())
@@ -263,6 +287,7 @@ CREATE TABLE messages(channel_id TEXT NOT NULL,seq INTEGER NOT NULL CHECK(seq>0)
  ts TEXT NOT NULL, ts_ns INTEGER NOT NULL,user_id TEXT NOT NULL,text TEXT NOT NULL,root INTEGER NOT NULL DEFAULT 0 CHECK(root>=0 AND root<seq),
  mention_ids TEXT, schedule_id TEXT,schedule_event TEXT,poll_id TEXT,ai TEXT CHECK(ai IS NULL OR json_valid(ai)),
  attachments TEXT CHECK(attachments IS NULL OR json_valid(attachments)),
+ webhook TEXT CHECK(webhook IS NULL OR json_valid(webhook)),
  PRIMARY KEY(channel_id,seq),UNIQUE(channel_id,schedule_id,schedule_event));
 CREATE INDEX messages_thread ON messages(channel_id,root,seq,user_id,ts);
 CREATE INDEX messages_time ON messages(ts_ns);
@@ -283,7 +308,9 @@ CREATE TABLE withdrawals(kind TEXT NOT NULL,channel_id TEXT NOT NULL,target_id T
 CREATE TABLE ai_accounts(id TEXT PRIMARY KEY, data TEXT NOT NULL CHECK(json_valid(data)));
 CREATE VIEW ai_account_groups AS SELECT a.id ai_account_id, j.value group_id FROM ai_accounts a, json_each(a.data, '$.groups') j;
 CREATE TABLE ai_daily_usage(user_id TEXT NOT NULL, date TEXT NOT NULL, count INTEGER NOT NULL, PRIMARY KEY(user_id, date));
-PRAGMA user_version=7;
+CREATE TABLE webhooks(id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, data TEXT NOT NULL CHECK(json_valid(data)));
+CREATE INDEX webhooks_channel ON webhooks(channel_id);
+PRAGMA user_version=8;
 `
 
 func get[T any](ctx context.Context, s *Store, table, id string) (*T, error) {

@@ -97,4 +97,11 @@ type Storage interface {
 	IncrementAIDailyUsage(context.Context, string, string) (int, error)
 	GetAIDailyUsage(context.Context, string, string) (int, error)
 	ListAIDailyUsage(context.Context, string) (map[string]int, error)
+	GetWebhook(context.Context, string) (*domain.Webhook, error)
+	GetWebhookByTokenHash(context.Context, string) (*domain.Webhook, error)
+	ListWebhooks(context.Context) ([]domain.Webhook, error)
+	ListChannelWebhooks(context.Context, string) ([]domain.Webhook, error)
+	SaveWebhook(context.Context, *domain.Webhook) error
+	DeleteWebhook(context.Context, string) error
+	TouchWebhookUsed(context.Context, string, time.Time) error
 }

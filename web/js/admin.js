@@ -1120,3 +1120,238 @@ window.reloadAIAccounts = reloadAIAccounts;
 window.listUsers = listUsers;
 window.renderGroups = renderGroups;
 window.openChannelManagement = openChannelManagement;
+
+// --- Webhooks Management ---
+S.managedWebhooks = [];
+S.selectedWebhookID = "";
+
+function populateWebhookChannels(selectedChannelID = "") {
+    const select = $("webhookChannel");
+    if (!select) return;
+    select.innerHTML = "";
+    const channels = S.channels || [];
+    channels.forEach((ch) => {
+        if (ch.archivedAt) return;
+        const opt = document.createElement("option");
+        opt.value = ch.id;
+        opt.textContent = `${ch.name} (${ch.type === "private" ? "非公開" : "公開"})`;
+        if (ch.id === selectedChannelID) opt.selected = true;
+        select.appendChild(opt);
+    });
+}
+
+function showWebhookPane(pane) {
+    $("webhookEmpty")?.classList.toggle("hidden", pane !== "empty");
+    $("webhookForm")?.classList.toggle("hidden", pane !== "form");
+    $("webhookCreatedNotice")?.classList.toggle("hidden", pane !== "notice");
+}
+
+function renderWebhookList() {
+    const query = ($("webhookSearch")?.value || "").trim().toLocaleLowerCase("ja-JP");
+    const items = (S.managedWebhooks || []).filter((w) =>
+        !query || `${w.name} ${w.id} ${w.channelId}`.toLocaleLowerCase("ja-JP").includes(query)
+    );
+    $("webhookCount").textContent = `${items.length}件`;
+    const host = $("webhookList");
+    host.replaceChildren();
+
+    for (const wh of items) {
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "group-row";
+        row.classList.toggle("selected", wh.id === S.selectedWebhookID);
+
+        const ch = S.channels?.find((c) => c.id === wh.channelId);
+        const chName = ch ? ch.name : wh.channelId;
+
+        row.innerHTML = '<span><b></b><small></small></span><span class="badge"></span>';
+        row.querySelector("b").textContent = `🤖 ${wh.name}`;
+        row.querySelector("small").textContent = `#${chName} (${wh.id})`;
+
+        const badge = row.querySelector(".badge");
+        badge.className = wh.enabled ? "badge badge-success" : "badge badge-secondary";
+        badge.textContent = wh.enabled ? "有効" : "無効";
+
+        row.onclick = () => selectManagedWebhook(wh.id);
+        host.append(row);
+    }
+
+    if (!items.length) {
+        const empty = document.createElement("div");
+        empty.className = "user-empty";
+        empty.textContent = query ? "該当するWebhookはありません" : "Webhookが登録されていません";
+        host.appendChild(empty);
+    }
+}
+
+async function loadManagedWebhooks(selectID = "") {
+    try {
+        S.managedWebhooks = await api("/api/admin/webhooks");
+    } catch (err) {
+        note(`Webhook一覧を取得できません: ${err.message}`, true);
+        S.managedWebhooks = [];
+    }
+    S.selectedWebhookID = S.managedWebhooks.some((w) => w.id === selectID) ? selectID : "";
+    renderWebhookList();
+    if (S.selectedWebhookID) {
+        selectManagedWebhook(S.selectedWebhookID);
+    } else {
+        showWebhookPane(S.managedWebhooks.length ? "empty" : "form");
+        if (!S.managedWebhooks.length) setupNewWebhookForm();
+    }
+}
+
+function setupNewWebhookForm() {
+    S.selectedWebhookID = "";
+    renderWebhookList();
+    showWebhookPane("form");
+    $("webhookDetailTitle").textContent = "Webhook新規登録";
+    $("webhookDetailID").textContent = "IDは登録時に自動生成されます";
+    $("deleteWebhook").classList.add("hidden");
+    $("webhookMetaFields").classList.add("hidden");
+    $("webhookName").value = "";
+    $("webhookDescription").value = "";
+    $("webhookEnabled").checked = true;
+    populateWebhookChannels(S.channel?.id || (S.channels && S.channels[0]?.id) || "");
+    $("webhookName").focus();
+}
+
+function selectManagedWebhook(id) {
+    const wh = S.managedWebhooks.find((w) => w.id === id);
+    if (!wh) return;
+    S.selectedWebhookID = id;
+    renderWebhookList();
+    showWebhookPane("form");
+    $("webhookDetailTitle").textContent = "Webhook設定";
+    $("webhookDetailID").textContent = wh.id;
+    $("deleteWebhook").classList.remove("hidden");
+    $("webhookMetaFields").classList.remove("hidden");
+    $("webhookName").value = wh.name;
+    $("webhookDescription").value = wh.description || "";
+    $("webhookEnabled").checked = wh.enabled;
+    $("webhookLastUsed").textContent = wh.lastUsedAt ? new Date(wh.lastUsedAt).toLocaleString("ja-JP") : "未利用";
+    populateWebhookChannels(wh.channelId);
+}
+
+function displayCreatedWebhookNotice(webhookID, rawToken) {
+    const origin = window.location.origin;
+    const basePath = S.basePath || "";
+    const url = `${origin}${basePath}/api/webhooks/${webhookID}/${rawToken}`;
+    const curlCmd = `curl -X POST -H "Content-Type: application/json" -d '{"text": "外部システムからのテスト通知です"}' "${url}"`;
+    const psCmd = `Invoke-RestMethod -Uri "${url}" -Method Post -ContentType "application/json" -Body '{"text": "外部システムからのテスト通知です"}'`;
+
+    $("createdWebhookURL").value = url;
+    $("createdWebhookCurl").value = curlCmd;
+    $("createdWebhookPowershell").value = psCmd;
+
+    showWebhookPane("notice");
+}
+
+$("webhookSettings").onclick = async () => {
+    $("webhookSearch").value = "";
+    await loadManagedWebhooks();
+    bootstrap.Modal.getOrCreateInstance($("webhookModal")).show();
+};
+$("webhookSearch").oninput = renderWebhookList;
+$("newWebhook").onclick = setupNewWebhookForm;
+$("dismissWebhookNotice").onclick = () => {
+    if (S.selectedWebhookID) {
+        selectManagedWebhook(S.selectedWebhookID);
+    } else {
+        showWebhookPane(S.managedWebhooks.length ? "empty" : "form");
+    }
+};
+
+$("copyWebhookURL").onclick = async () => {
+    try {
+        await navigator.clipboard.writeText($("createdWebhookURL").value);
+        note("Webhook URLをコピーしました");
+    } catch {
+        note("クリップボードへのコピーに失敗しました", true);
+    }
+};
+$("copyWebhookCurl").onclick = async () => {
+    try {
+        await navigator.clipboard.writeText($("createdWebhookCurl").value);
+        note("cURLコマンドをコピーしました");
+    } catch {
+        note("クリップボードへのコピーに失敗しました", true);
+    }
+};
+$("copyWebhookPowershell").onclick = async () => {
+    try {
+        await navigator.clipboard.writeText($("createdWebhookPowershell").value);
+        note("PowerShellコマンドをコピーしました");
+    } catch {
+        note("クリップボードへのコピーに失敗しました", true);
+    }
+};
+
+$("webhookForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const isNew = !S.selectedWebhookID;
+    const body = {
+        name: $("webhookName").value.trim(),
+        channelId: $("webhookChannel").value,
+        description: $("webhookDescription").value.trim(),
+        enabled: $("webhookEnabled").checked,
+    };
+    try {
+        if (isNew) {
+            const res = await api("/api/admin/webhooks", {
+                method: "POST",
+                body: JSON.stringify(body),
+            });
+            note("Webhookを作成しました");
+            await loadManagedWebhooks(res.webhook.id);
+            displayCreatedWebhookNotice(res.webhook.id, res.token);
+        } else {
+            const updated = await api(`/api/admin/webhooks/${encodeURIComponent(S.selectedWebhookID)}`, {
+                method: "PUT",
+                body: JSON.stringify(body),
+            });
+            note("Webhookを更新しました");
+            await loadManagedWebhooks(updated.id);
+        }
+    } catch (err) {
+        note(`保存に失敗しました: ${err.message}`, true);
+    }
+};
+
+$("regenerateWebhookToken").onclick = async () => {
+    if (!S.selectedWebhookID) return;
+    const wh = S.managedWebhooks.find((w) => w.id === S.selectedWebhookID);
+    const name = wh ? wh.name : S.selectedWebhookID;
+    if (!window.confirm(`「${name}」のトークンを再生成しますか？\n\n※ 旧トークンは即時失効し、旧URLからの投稿はできなくなります。`)) {
+        return;
+    }
+    try {
+        const res = await api(`/api/admin/webhooks/${encodeURIComponent(S.selectedWebhookID)}/regenerate`, {
+            method: "POST",
+        });
+        note("トークンを再生成しました");
+        displayCreatedWebhookNotice(res.webhook.id, res.token);
+    } catch (err) {
+        note(`トークン再生成に失敗しました: ${err.message}`, true);
+    }
+};
+
+$("deleteWebhook").onclick = async () => {
+    if (!S.selectedWebhookID) return;
+    const wh = S.managedWebhooks.find((w) => w.id === S.selectedWebhookID);
+    const name = wh ? wh.name : S.selectedWebhookID;
+    if (!window.confirm(`「${name}」を削除しますか？\n\nこの操作は元に戻せません。`)) {
+        return;
+    }
+    try {
+        await api(`/api/admin/webhooks/${encodeURIComponent(S.selectedWebhookID)}`, {
+            method: "DELETE",
+        });
+        S.selectedWebhookID = "";
+        note("Webhookを削除しました");
+        await loadManagedWebhooks();
+    } catch (err) {
+        note(`削除に失敗しました: ${err.message}`, true);
+    }
+};
+

@@ -40,7 +40,9 @@ function messageDisplayText(message) {
 }
 
 function messageAuthor(message) {
-    return message.ai ? `🤖 ${message.ai.name}` : S.directory?.get(message.userId) || message.userId;
+    if (message.ai) return `🤖 ${message.ai.name}`;
+    if (message.webhook) return `🤖 ${message.webhook.name}`;
+    return S.directory?.get(message.userId) || message.userId;
 }
 
 function aiCandidates(query = "") {

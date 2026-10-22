@@ -62,6 +62,10 @@ func New(svc *service.Service, auth Authenticator, logger *slog.Logger) http.Han
 
 func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if strings.HasPrefix(r.URL.Path, "/api/webhooks/") && r.Method == http.MethodPost {
+		a.handleIncomingWebhook(w, r)
+		return
+	}
 	if r.URL.Path == "/api/auth/login" && r.Method == http.MethodPost {
 		a.login(w, r)
 		return
@@ -240,6 +244,38 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		default:
 			a.methodNotAllowed(w, http.MethodGet, http.MethodPut, http.MethodDelete)
 		}
+		return
+	}
+	if path == "api/admin/webhooks" {
+		switch r.Method {
+		case http.MethodGet:
+			a.listAdminWebhooks(w, r, userID)
+		case http.MethodPost:
+			a.createAdminWebhook(w, r, userID)
+		default:
+			a.methodNotAllowed(w, http.MethodGet, http.MethodPost)
+		}
+		return
+	}
+	if len(parts) == 4 && parts[0] == "api" && parts[1] == "admin" && parts[2] == "webhooks" && parts[3] != "" {
+		switch r.Method {
+		case http.MethodGet:
+			a.getAdminWebhook(w, r, userID, parts[3])
+		case http.MethodPut:
+			a.updateAdminWebhook(w, r, userID, parts[3])
+		case http.MethodDelete:
+			a.deleteAdminWebhook(w, r, userID, parts[3])
+		default:
+			a.methodNotAllowed(w, http.MethodGet, http.MethodPut, http.MethodDelete)
+		}
+		return
+	}
+	if len(parts) == 5 && parts[0] == "api" && parts[1] == "admin" && parts[2] == "webhooks" && parts[3] != "" && parts[4] == "regenerate" {
+		if r.Method != http.MethodPost {
+			a.methodNotAllowed(w, http.MethodPost)
+			return
+		}
+		a.regenerateAdminWebhook(w, r, userID, parts[3])
 		return
 	}
 	if path == "api/users" {
@@ -1148,6 +1184,8 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 		status, message = http.StatusConflict, "IDは重複できません"
 	case errors.Is(err, service.ErrStale):
 		status, message = http.StatusConflict, "予定調整が更新されています。再読み込みしてください"
+	case errors.Is(err, service.ErrRateLimited):
+		status, message = http.StatusTooManyRequests, "リクエスト回数の上限を超えました。しばらく待ってから再試行してください"
 	case errors.Is(err, service.ErrInvalid):
 		status, message = http.StatusBadRequest, strings.TrimPrefix(err.Error(), service.ErrInvalid.Error()+": ")
 		if message == service.ErrInvalid.Error() || message == "" {

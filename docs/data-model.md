@@ -217,7 +217,7 @@ erDiagram
 
 図の線は参照関係を示します。DB制約として宣言された外部キーは `mention_refs.message_id → messages.id` です。その他の参照はサービス層とストレージ処理で検証し、SQLの外部キー制約を示すものではありません。`users`・`groups`・`channels`・`sessions`・`schedules`・`polls`・`ai_accounts` はバージョン付きJSONを1件ずつ保持します。`user_groups`、`channel_members`、`channel_groups`、`channel_managers`、`ai_account_groups` はそのJSONから作る**ビュー**であり、別の保存テーブルではありません。
 
-`messages` は `(channel_id, seq)` が主キーで `id` は全体で一意です。`messages` にはスレッド・時刻・投稿者の索引があります。`counters` は採番の正本で、将来履歴を消しても連番を再利用しないための表です。`reaction_events` と回答イベント表は履歴、`reactions` はリアクションの現在状態を持ちます。SQLiteスキーマは現行の `PRAGMA user_version=6` です。
+`messages` は `(channel_id, seq)` が主キーで `id` は全体で一意です。`messages` にはスレッド・時刻・投稿者の索引があります。`counters` は採番の正本で、将来履歴を消しても連番を再利用しないための表です。`reaction_events` と回答イベント表は履歴、`reactions` はリアクションの現在状態を持ちます。SQLiteスキーマは現行の `PRAGMA user_version=8` です。
 
 ## 保存構成（SQLite）
 

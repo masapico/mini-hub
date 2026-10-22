@@ -10,7 +10,7 @@
   <aside class="side" id="channelNav" tabindex="-1">
     <div class="brand"><svg class="brand-icon" aria-hidden="true"><use href="{{.BasePath}}/vendor/bootstrap-icons/bootstrap-icons.svg#chat-square-text"></use></svg><span id="channelNavTitle">{{.WorkspaceTitle}}</span><button class="iconbtn channel-nav-close" id="channelNavClose" type="button" aria-label="チャンネル一覧を閉じる" title="チャンネル一覧を閉じる"><svg aria-hidden="true"><use href="{{.BasePath}}/vendor/bootstrap-icons/bootstrap-icons.svg#x-lg"></use></svg></button></div>
     <div class="profile"><div class="profile-main"><div class="avatar" id="avatar">?</div><div class="profile-copy"><b id="me">読み込み中</b><div class="profile-status-line"><span class="muted connection-status" id="status">未接続</span><span class="online-users-badge hidden" id="onlineUsersBadge" title="現在チャットに接続中のユーザー数"><span class="status-divider" aria-hidden="true">|</span><span id="onlineUsersCount">0 users</span></span></div></div><div class="profile-actions"><button class="iconbtn hidden" id="changePassword" type="button" aria-label="パスワード変更" title="パスワード変更"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M0 8a4 4 0 0 1 7.465-2H14a.5.5 0 0 1 .354.146l1.5 1.5a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0L13 9.207l-.646.647a.5.5 0 0 1-.708 0L11 9.207l-.646.647a.5.5 0 0 1-.708 0L9 9.207l-.646.647A.5.5 0 0 1 8 10h-.535A4 4 0 0 1 0 8m4-3a3 3 0 1 0 2.712 4.285A.5.5 0 0 1 7.163 9h.63l.853-.854a.5.5 0 0 1 .708 0l.646.647.646-.647a.5.5 0 0 1 .708 0l.646.647.646-.647a.5.5 0 0 1 .708 0l.646.647.793-.793-1-1h-6.63a.5.5 0 0 1-.451-.285A3 3 0 0 0 4 5"/><path d="M4 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0"/></svg></button><button class="iconbtn logout-button" id="logout" type="button" aria-label="ログアウト" title="ログアウト"><svg aria-hidden="true"><use href="{{.BasePath}}/vendor/bootstrap-icons/bootstrap-icons.svg#box-arrow-right"></use></svg></button></div></div>
-      <nav id="admin" class="admin-menu hidden" aria-label="管理者メニュー"><button class="admin-toggle" id="adminToggle" type="button" aria-expanded="true" aria-controls="adminActions"><span>管理者メニュー</span><svg class="bi" aria-hidden="true"><use href="{{.BasePath}}/vendor/bootstrap-icons/bootstrap-icons.svg#chevron-down"></use></svg></button><div class="admin-actions" id="adminActions"><button class="admin-button" id="groups" type="button">グループ管理</button><button class="admin-button" id="users" type="button">ユーザー管理</button><button class="admin-button" id="addChannel" type="button">チャンネル作成</button><button class="admin-button" id="manageChannels" type="button">チャンネル管理</button><button class="admin-button" id="aiSettings" type="button">AI連携設定</button></div></nav>
+      <nav id="admin" class="admin-menu hidden" aria-label="管理者メニュー"><button class="admin-toggle" id="adminToggle" type="button" aria-expanded="true" aria-controls="adminActions"><span>管理者メニュー</span><svg class="bi" aria-hidden="true"><use href="{{.BasePath}}/vendor/bootstrap-icons/bootstrap-icons.svg#chevron-down"></use></svg></button><div class="admin-actions" id="adminActions"><button class="admin-button" id="groups" type="button">グループ管理</button><button class="admin-button" id="users" type="button">ユーザー管理</button><button class="admin-button" id="addChannel" type="button">チャンネル作成</button><button class="admin-button" id="manageChannels" type="button">チャンネル管理</button><button class="admin-button" id="aiSettings" type="button">AI連携設定</button><button class="admin-button" id="webhookSettings" type="button">Webhook設定</button></div></nav>
     </div>
     <div class="channel-search"><label class="visually-hidden" for="channelSearch">チャンネルを名前・IDで検索</label><input class="form-control dads-input-text form-control-sm" id="channelSearch" type="search" placeholder="チャンネルを検索" autocomplete="off" aria-controls="public private" aria-describedby="channelSearchStatus"><span id="channelSearchStatus" class="channel-search-status" role="status" aria-live="polite"></span></div>
     <nav class="channel-nav" aria-label="チャンネル一覧">
@@ -122,6 +122,52 @@
       <div class="field"><label class="dads-label">OpenAI互換パラメータ（任意・空欄時はモデル既定値）</label><div class="row g-2"><div class="col-md-4"><label for="aiTemperature" class="small muted dads-support-text">Temperature (0.0〜2.0)</label><input class="form-control dads-input-text form-control-sm" id="aiTemperature" type="number" step="0.1" min="0" max="2" placeholder="例：0.7"></div><div class="col-md-4"><label for="aiTopP" class="small muted dads-support-text">Top P (0.0〜1.0)</label><input class="form-control dads-input-text form-control-sm" id="aiTopP" type="number" step="0.05" min="0" max="1" placeholder="例：0.9"></div><div class="col-md-4"><label for="aiMaxTokens" class="small muted dads-support-text">最大トークン数 (Max Tokens)</label><input class="form-control dads-input-text form-control-sm" id="aiMaxTokens" type="number" step="1" min="1" placeholder="例：2048"></div></div></div>
       <div class="field"><label class="dads-label">利用許可グループ</label><small class="muted dads-support-text d-block mb-2">未選択の場合はすべてのユーザーが利用できます。グループを選択した場合は、所属ユーザーおよび管理者のみが利用できます。</small><div id="aiGroupsList" class="group-check-list"></div></div>
       <div class="actions mt-4"><button class="btn btn-primary dads-button dads-button--primary" id="saveAISubmit" type="submit">保存</button></div>
+    </form>
+  </section>
+</div></div></div></div>
+
+<div class="modal fade" id="webhookModal" tabindex="-1" aria-labelledby="webhookModalTitle" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-centered"><div class="modal-content dads-card user-modal"><header class="modal-header user-modal-head"><div><h2 class="modal-title fs-5" id="webhookModalTitle">Webhook連携設定</h2><p class="muted mb-0">外部システム（RPA・監視ツール等）から特定のチャンネルへ自動投稿するWebhookを管理します。</p></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button></header><div class="modal-body p-0 group-manager">
+  <aside class="group-browser"><label class="user-search"><span class="muted dads-support-text">登録済みWebhook</span><input class="form-control dads-input-text" id="webhookSearch" type="search" placeholder="名前またはIDで検索" autocomplete="off"></label><div class="group-browser-actions"><span class="user-count" id="webhookCount"></span><button class="btn btn-primary dads-button dads-button--primary btn-sm" id="newWebhook" type="button">新規登録</button></div><div id="webhookList" class="grouplist"></div></aside>
+  <section class="group-detail">
+    <div id="webhookEmpty" class="group-empty">左の一覧からWebhookを選択するか、「新規登録」を押してください。</div>
+    <div id="webhookCreatedNotice" class="webhook-notice-card hidden">
+      <div class="alert alert-warning mb-3" role="alert">
+        <strong>⚠️ Webhook URLは今しか表示されません</strong><br>このトークンを含むURLは再表示できません。安全な場所にコピーして保管してください。
+      </div>
+      <div class="field mb-3">
+        <label class="dads-label" for="createdWebhookURL">Webhook URL</label>
+        <div class="input-group">
+          <input class="form-control dads-input-text font-monospace small" id="createdWebhookURL" readonly>
+          <button class="btn btn-outline-secondary dads-button dads-button--secondary" id="copyWebhookURL" type="button">コピー</button>
+        </div>
+      </div>
+      <div class="field mb-3">
+        <label class="dads-label" for="createdWebhookCurl">テストコマンド (cURL)</label>
+        <div class="input-group">
+          <textarea class="form-control dads-textarea font-monospace small" id="createdWebhookCurl" rows="3" readonly></textarea>
+          <button class="btn btn-outline-secondary dads-button dads-button--secondary" id="copyWebhookCurl" type="button">コピー</button>
+        </div>
+      </div>
+      <div class="field mb-3">
+        <label class="dads-label" for="createdWebhookPowershell">テストコマンド (PowerShell)</label>
+        <div class="input-group">
+          <textarea class="form-control dads-textarea font-monospace small" id="createdWebhookPowershell" rows="3" readonly></textarea>
+          <button class="btn btn-outline-secondary dads-button dads-button--secondary" id="copyWebhookPowershell" type="button">コピー</button>
+        </div>
+      </div>
+      <button class="btn btn-outline-secondary dads-button dads-button--secondary btn-sm" id="dismissWebhookNotice" type="button">設定画面に戻る</button>
+    </div>
+    <form id="webhookForm" class="hidden">
+      <div class="group-detail-head"><div><h3 id="webhookDetailTitle">Webhook設定</h3><span class="muted" id="webhookDetailID"></span></div><button class="btn btn-outline-danger dads-button dads-button--danger btn-sm hidden" id="deleteWebhook" type="button">このWebhookを削除</button></div>
+      <div class="field"><label class="dads-label" for="webhookName">表示名<span class="badge-required" aria-hidden="true">必須</span></label><input class="form-control dads-input-text" id="webhookName" required maxlength="100" placeholder="例：RPA監視ボット"><small class="muted dads-support-text">チャット画面上で投稿者名（🤖 表示名）として表示されます。</small></div>
+      <div class="field"><label class="dads-label" for="webhookChannel">投稿先チャンネル<span class="badge-required" aria-hidden="true">必須</span></label><select class="form-select dads-select" id="webhookChannel" required></select></div>
+      <div class="field"><label class="dads-label" for="webhookDescription">説明（任意）</label><textarea class="form-control dads-textarea" id="webhookDescription" rows="2" placeholder="用途や連携システム名などをメモできます"></textarea></div>
+      <label class="check mb-3"><input class="form-check-input" id="webhookEnabled" type="checkbox" checked><span class="form-check-label ms-1">このWebhookを有効にする</span></label>
+      <div class="field hidden" id="webhookMetaFields">
+        <div class="muted small mb-2">最終利用日時: <span id="webhookLastUsed">未利用</span></div>
+        <button class="btn btn-outline-warning dads-button dads-button--secondary btn-sm" id="regenerateWebhookToken" type="button">トークンを再生成（旧トークンは即時失効）</button>
+      </div>
+      <div class="actions mt-4"><button class="btn btn-primary dads-button dads-button--primary" id="saveWebhookSubmit" type="submit">保存</button></div>
     </form>
   </section>
 </div></div></div></div>
