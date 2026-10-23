@@ -1112,3 +1112,30 @@ func TestHelpButtonAndModalAreEmbedded(t *testing.T) {
 		t.Fatal("app.css does not contain styles for help modal")
 	}
 }
+
+func TestToastContainerPositioning(t *testing.T) {
+	expected := `toast-container position-fixed top-0 start-50 translate-middle-x p-3`
+	authenticatedHandler := Handler(testAuthenticator(true))
+	unauthenticatedHandler := Handler(testAuthenticator(false))
+
+	for _, tc := range []struct {
+		handler http.Handler
+		path    string
+	}{
+		{authenticatedHandler, "/"},
+		{unauthenticatedHandler, "/login"},
+		{authenticatedHandler, "/schedules"},
+	} {
+		res := request(t, tc.handler, tc.path)
+		if res.Code != http.StatusOK {
+			t.Fatalf("path %s returned %d", tc.path, res.Code)
+		}
+		body := res.Body.String()
+		if !strings.Contains(body, expected) {
+			t.Fatalf("page %s does not contain top-center toast container (%q)", tc.path, expected)
+		}
+		if strings.Contains(body, `top-0 end-0`) {
+			t.Fatalf("page %s still contains old top-right toast positioning class", tc.path)
+		}
+	}
+}
