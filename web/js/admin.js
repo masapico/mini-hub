@@ -1165,7 +1165,7 @@ function renderWebhookList() {
         const chName = ch ? ch.name : wh.channelId;
 
         row.innerHTML = '<span><b></b><small></small></span><span class="badge"></span>';
-        row.querySelector("b").textContent = `🤖 ${wh.name}`;
+        row.querySelector("b").textContent = `📢 ${wh.name}`;
         row.querySelector("small").textContent = `#${chName} (${wh.id})`;
 
         const badge = row.querySelector(".badge");

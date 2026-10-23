@@ -57,8 +57,8 @@
   <section class="help-section">
     <h3>1. チャンネル</h3>
     <ul class="help-list">
-      <li><strong>公開チャンネル</strong>：組織内のすべてのユーザーが自由に参加・閲覧・退出できます。</li>
-      <li><strong>非公開チャンネル</strong>：管理者または既存メンバーによって招待されたユーザーのみが参加できます。</li>
+      <li><strong>公開チャンネル</strong>：登録ユーザーが自由に参加・閲覧・退出できます。</li>
+      <li><strong>非公開チャンネル</strong>：管理者またはチャンネル管理者によって追加されたユーザーのみが参加できます。</li>
       <li><strong>チャンネルの検索</strong>：左サイドバー上部の検索窓から、名前やIDで素早く目的のチャンネルを探せます。</li>
     </ul>
   </section>
@@ -67,7 +67,7 @@
     <ul class="help-list">
       <li><strong>送信方法</strong>：メッセージ入力後、<kbd class="help-kbd">Ctrl</kbd> + <kbd class="help-kbd">Enter</kbd> キーまたは「送信」ボタンで送信します（<kbd class="help-kbd">Enter</kbd> キーのみは改行になります）。</li>
       <li><strong>書式ツール</strong>：入力欄のツールバーから「太字」「取り消し線」「引用」「リンク挿入」が利用できます。</li>
-      <li><strong>ファイル添付</strong>：AI宛て（<code>@ai:</code>）の質問・相談時のみクリップアイコンからファイルを添付できます（サーバーには保存されず、AI処理完了時に破棄されます）。</li>
+      <li><strong>ファイル添付</strong>：AIへのメンション時のみクリップアイコンからファイルを添付できます（AIへの送信完了後に棄され保存されません）。</li>
     </ul>
   </section>
   <section class="help-section">
@@ -78,17 +78,17 @@
     <h3>4. リアクション</h3>
     <p>メッセージにマウスポインターを合わせると表示されるリアクションボタンから、ワンクリックでリアクションを送信できます。</p>
     <ul class="help-list">
-      <li><strong>感謝（ハート）</strong>：感謝やお礼の気持ちを伝えます。</li>
-      <li><strong>了解（サムズアップ）</strong>：内容を確認・承諾したことを伝えます。</li>
-      <li><strong>確認中（砂時計）</strong>：内容を確認・作業中であることを伝えます。</li>
-      <li><strong>完了（チェック）</strong>：対応や作業が完了したことを伝えます。</li>
+      <li><strong>感謝❤️</strong>：感謝やお礼の気持ちを伝えます。</li>
+      <li><strong>了解👍</strong>：内容を確認・承諾したことを伝えます。</li>
+      <li><strong>確認中⏳</strong>：内容を確認・作業中であることを伝えます。</li>
+      <li><strong>完了✅</strong>：対応や作業が完了したことを伝えます。</li>
     </ul>
   </section>
   <section class="help-section">
     <h3>5. メンション</h3>
     <ul class="help-list">
-      <li><code>@ユーザー</code>：特定のユーザーを指定して通知を送信します。</li>
-      <li><code>@AI</code>：登録されているAIアシスタントを呼び出し、チャット内で質問・回答を行えます。</li>
+      <li><code>@ユーザー名</code>：特定のユーザーを指定して通知を送信します。</li>
+      <li><code>@AI名</code>：登録されているAIアシスタントを呼び出し、チャット内で質問・回答を行えます。</li>
       <li>ユーザー宛のメンションは複数宛先を設定することができます</li>
     </ul>
   </section>
@@ -243,7 +243,7 @@
     </div>
     <form id="webhookForm" class="hidden">
       <div class="group-detail-head"><div><h3 id="webhookDetailTitle">Webhook設定</h3><span class="muted" id="webhookDetailID"></span></div><button class="btn btn-outline-danger dads-button dads-button--danger btn-sm hidden" id="deleteWebhook" type="button">このWebhookを削除</button></div>
-      <div class="field"><label class="dads-label" for="webhookName">表示名<span class="badge-required" aria-hidden="true">必須</span></label><input class="form-control dads-input-text" id="webhookName" required maxlength="100" placeholder="例：RPA監視ボット"><small class="muted dads-support-text">チャット画面上で投稿者名（🤖 表示名）として表示されます。</small></div>
+      <div class="field"><label class="dads-label" for="webhookName">表示名<span class="badge-required" aria-hidden="true">必須</span></label><input class="form-control dads-input-text" id="webhookName" required maxlength="100" placeholder="例：RPA監視ボット"><small class="muted dads-support-text">チャット画面上で投稿者名（📢 表示名）として表示されます。</small></div>
       <div class="field"><label class="dads-label" for="webhookChannel">投稿先チャンネル<span class="badge-required" aria-hidden="true">必須</span></label><select class="form-select dads-select" id="webhookChannel" required></select></div>
       <div class="field"><label class="dads-label" for="webhookDescription">説明（任意）</label><textarea class="form-control dads-textarea" id="webhookDescription" rows="2" placeholder="用途や連携システム名などをメモできます"></textarea></div>
       <label class="check mb-3"><input class="form-check-input" id="webhookEnabled" type="checkbox" checked><span class="form-check-label ms-1">このWebhookを有効にする</span></label>

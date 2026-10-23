@@ -41,7 +41,7 @@ function messageDisplayText(message) {
 
 function messageAuthor(message) {
     if (message.ai) return `🤖 ${message.ai.name}`;
-    if (message.webhook) return `🤖 ${message.webhook.name}`;
+    if (message.webhook) return `📢 ${message.webhook.name}`;
     return S.directory?.get(message.userId) || message.userId;
 }
 
