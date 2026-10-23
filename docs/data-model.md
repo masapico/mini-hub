@@ -34,6 +34,8 @@ erDiagram
         int64 threadRootSeq
         string text
         json attachments
+        json ai
+        json webhook
     }
     READ_STATE {
         string userId PK
@@ -78,15 +80,32 @@ erDiagram
         string targetId PK
         string events
     }
+    AI_ACCOUNT {
+        string id PK
+        string name
+        string model
+        json groups
+        json parameters
+    }
+    WEBHOOK {
+        string id PK
+        string channelId
+        string name
+        string tokenHash
+        bool enabled
+    }
 
     USER }o--o{ GROUP : "所属"
     USER }o--o{ CHANNEL : "直接参加・管理"
     GROUP }o--o{ CHANNEL : "割当"
     CHANNEL ||--o{ MESSAGE : "保持"
     USER ||--o{ MESSAGE : "投稿"
+    WEBHOOK ||--o{ MESSAGE : "外部自動投稿"
+    AI_ACCOUNT ||--o{ MESSAGE : "AI回答"
     MESSAGE ||--o{ MESSAGE : "起点と返信"
     USER ||--o{ READ_STATE : "既読位置"
     CHANNEL ||--o{ READ_STATE : "対象"
+    CHANNEL ||--o{ WEBHOOK : "送信先"
     MESSAGE ||--o{ REACTION : "反応"
     CHANNEL ||--o{ POLL : "公開先"
     POLL ||--o{ POLL_RESPONSE : "回答履歴"
@@ -97,7 +116,7 @@ erDiagram
 
 これは**概念上の関係**です。`User.Groups` がグループ所属の正本で、チャンネルの直接参加者・割当グループ・管理者は `Channel` の配列にあります。独立した所属レコードを両方式で保存するわけではありません。グループ所属者とチャンネル割当グループから実効メンバーを判定します。公開チャンネルの閲覧は非参加者にも許可されますが、投稿は参加が必要です。非公開チャンネルは実効メンバーのみ閲覧・投稿できます。
 
-メッセージの `seq` はチャンネル内で単調増加し、返信も同じ連番を使います。`threadRootSeq=0` は本流、正の値は起点メッセージの連番です。既読位置はユーザー×チャンネルと、閲覧したスレッドごとに保持し、後戻りさせません。`POLL` と `SCHEDULE` は告知メッセージへの参照を持ちます。`WITHDRAWAL` はメッセージ・投票・予定調整の取消と復元の履歴で、元データの物理削除ではありません。
+メッセージの `seq` はチャンネル内で単調増加し、返信も同じ連番を使います。`threadRootSeq=0` は本流、正の値は起点メッセージの連番です。人間による投稿、Incoming Webhook による外部通知、AI による自動回答はいずれも共通の `MESSAGE` レコードとして連番採番・永続化されます。既読位置はユーザー×チャンネルと、閲覧したスレッドごとに保持し、後戻りさせません。`POLL` と `SCHEDULE` は告知メッセージへの参照を持ちます。`WITHDRAWAL` はメッセージ・投票・予定調整の取消と復元の履歴で、元データの物理削除ではありません。
 
 ## SQLiteの物理ER図
 
@@ -131,6 +150,17 @@ erDiagram
         text id PK
         json data
     }
+    ai_daily_usage {
+        text user_id PK
+        text date PK
+        int count
+    }
+    webhooks {
+        text id PK
+        text channel_id
+        text token_hash UK
+        json data
+    }
     counters {
         text kind PK
         text id PK
@@ -147,8 +177,11 @@ erDiagram
         int root
         text mention_ids
         text schedule_id
+        text schedule_event
         text poll_id
+        text ai
         text attachments
+        text webhook
     }
     mention_refs {
         text message_id PK
@@ -173,6 +206,8 @@ erDiagram
         text user_id
         text key
         int active
+        text ts
+        int version
     }
     reactions {
         text channel_id PK
@@ -205,6 +240,7 @@ erDiagram
     }
 
     channels ||--o{ messages : "channel_id"
+    channels ||--o{ webhooks : "channel_id"
     messages ||--o{ mention_refs : "message_id FK"
     messages ||--o{ reaction_events : "channel_id seq"
     messages ||--o{ reactions : "channel_id seq"
@@ -215,19 +251,20 @@ erDiagram
     channels ||--o{ withdrawals : "channel_id"
 ```
 
-図の線は参照関係を示します。DB制約として宣言された外部キーは `mention_refs.message_id → messages.id` です。その他の参照はサービス層とストレージ処理で検証し、SQLの外部キー制約を示すものではありません。`users`・`groups`・`channels`・`sessions`・`schedules`・`polls`・`ai_accounts` はバージョン付きJSONを1件ずつ保持します。`user_groups`、`channel_members`、`channel_groups`、`channel_managers`、`ai_account_groups` はそのJSONから作る**ビュー**であり、別の保存テーブルではありません。
+図の線は参照関係を示します。DB制約として宣言された外部キーは `mention_refs.message_id → messages.id` です。その他の参照はサービス層とストレージ処理で検証し、SQLの外部キー制約を示すものではありません。`users`・`groups`・`channels`・`sessions`・`schedules`・`polls`・`ai_accounts`・`webhooks` はバージョン付きJSONを1件ずつ保持します。`user_groups`、`channel_members`、`channel_groups`、`channel_managers`、`ai_account_groups` はそのJSONから作る**ビュー**であり、別の保存テーブルではありません。
 
-`messages` は `(channel_id, seq)` が主キーで `id` は全体で一意です。`messages` にはスレッド・時刻・投稿者の索引があります。`counters` は採番の正本で、将来履歴を消しても連番を再利用しないための表です。`reaction_events` と回答イベント表は履歴、`reactions` はリアクションの現在状態を持ちます。SQLiteスキーマは現行の `PRAGMA user_version=8` です。
+`messages` は `(channel_id, seq)` が主キーで `id` は全体で一意です。`messages` にはスレッド・時刻・投稿者・投票の索引があります。`counters` は採番の正本で、将来履歴を消しても連番を再利用しないための表です。`reaction_events` と回答イベント表は履歴、`reactions` はリアクションの現在状態を持ちます。SQLiteスキーマは現行の `PRAGMA user_version=8` です。
 
 ## 保存構成（SQLite）
 
-永続化は組み込みSQLite（`dataDir/minuhub.db`）に一本化されています。`storage.json` に `"sqlite"` を記録し、`.minihub.lock` でプロセス排他制御を行います。メッセージ、既読状態、リアクション、アンケート、予定調整、AIアカウント設定の全データがSQLiteのリレーショナルテーブルに保持されます。
+永続化は組み込みSQLite（`dataDir/minuhub.db`）に一本化されています。`storage.json` に `"sqlite"` を記録し、`.minihub.lock` でプロセス排他制御を行います。メッセージ、既読状態、リアクション、アンケート、予定調整、AIアカウント設定、Incoming Webhook設定の全データがSQLiteのリレーショナルテーブルに保持されます。
 
 メッセージの添付ファイルメタデータ（`messages.attachments` 列）には、ファイルID・ファイル名・サイズのみがJSON配列として保存され、サーバーホスト内には実体ファイルは保持されません。
 
-## AIアカウントとAI投稿
+## AIアカウントと外部連携（Incoming Webhook）
 
-AIアカウント設定は、組み込みSQLiteのスキーマv6（`ai_accounts`テーブル）にJSONデータとして永続化され、設定されたグループ情報は`ai_account_groups`ビューで展開されます。
+- **AIアカウント設定**: 組み込みSQLiteのスキーマv6（`ai_accounts`テーブル）にJSONデータとして永続化され、設定されたグループ情報は`ai_account_groups`ビューで展開されます。利用制限カウンターは`ai_daily_usage`テーブル（スキーマv7）で日次管理されます。
+- **Incoming Webhook設定**: スキーマv8で追加された`webhooks`テーブルにJSONデータとして永続化され、SHA-256ハッシュ化したトークンで認証されます。メッセージ投稿時は`messages.webhook`列に発信元Webhookのメタデータが記録されます。
 
 AI回答・エラーは通常のスレッド返信として保存します。`userId`は`ai_<設定ID>`、任意項目`ai`は`id`、`name`、`requestId`、`triggerMessageId`、`requestedBy`、`kind`（`answer`または`error`）です。名前は保存時点の値を保持し、設定削除後も表示できます。人へのメンション通知先は空配列です。
 

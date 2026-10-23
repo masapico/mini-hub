@@ -2,6 +2,11 @@
 
 [開発・保守資料一覧](README.md) / [設計仕様](../DESIGN.md)
 
+`minihub` は、メッセージハブとして3種類のインターフェースを提供します。
+1. **ブラウザクライアント向けAPI**: CookieセッションおよびCSRFトークンによる認証を伴う、チャンネル・メッセージ・スレッド・投票等の操作API
+2. **外部システム連携用 Incoming Webhook API**: トークン認証とレート制限を備えた、外部システム（監視・CI/CD・バッチ）からのメッセージ投稿API
+3. **リアルタイム通知 WebSocket API**: 接続クライアントへ軽量な更新通知イベントを即時配信するAPI
+
 本書のAPIパスはドメイン直下での公開を基準に記載します。`server.basePath: "/hub"` の場合は各パスの先頭に `/hub` を付け、以下の `base_url` は `https://myhost.com/hub` のように指定します。WebSocketも `/hub/api/realtime` です。
 
 ## 認証と使用例
