@@ -1,0 +1,12 @@
+.git
+.github
+data
+dist
+minihub
+*.exe
+*.test
+*.db*
+*.log
+minihub.json
+.DS_Store
+

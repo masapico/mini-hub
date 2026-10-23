@@ -1,0 +1,37 @@
+# ==============================================================================
+# minihub Docker Compose 構成
+#
+# 【起動方法】
+#   docker compose up -d
+#
+# 【ログ確認】
+#   docker compose logs -f
+#
+# 【停止方法】
+#   docker compose down
+#
+# 【バックアップ取得】
+#   docker compose exec minihub /app/minihub backup -out /app/data/backup.db
+# ==============================================================================
+
+services:
+  minihub:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: minihub
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      # SQLiteデータベースおよびログの永続化マッピング
+      # ホスト側の ./data ディレクトリに minuhub.db 等が保存されます
+      - ./data:/app/data
+
+      # 設定ファイルのマウント（任意）
+      # minihub.sample.json をコピーしてパスワード等を設定した minihub.json を
+      # マウントする場合は以下のコメントを解除してください
+      # - ./minihub.json:/app/minihub.json:ro
+    environment:
+      - TZ=Asia/Tokyo
+
