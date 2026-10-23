@@ -409,7 +409,8 @@
     .app .topicons { display: contents; }
     .app .channel-nav-open { display: inline-grid; place-items: center; order: 0; }
     .app #channelInfoToggle,
-    .app #notifications { order: 2; }
+    .app #notifications,
+    .app #helpButton { order: 2; }
     .app #join:not(.hidden) { order: 3; flex: 1 0 100%; min-height: 36px; margin-top: 2px; }
     .app .side {
         position: fixed;

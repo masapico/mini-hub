@@ -144,13 +144,20 @@ function replyLabel(summary) {
     const hasUnread = summary.participating && summary.unreadCount;
     return `返信${summary.replyCount}件 · ${new Date(summary.updatedAt).toLocaleTimeString("ja-JP", {hour:"2-digit",minute:"2-digit"})}${hasUnread ? " · 未読あり" : ""}`;
 }
+function updateReplyButtonContent(button, summary) {
+    button.replaceChildren();
+    if (typeof svgIcon === "function") {
+        button.append(svgIcon("chat-left-text"));
+    }
+    button.append(document.createTextNode(replyLabel(summary)));
+}
 function replyButton(message) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "btn btn-outline-secondary reply-button";
     button.dataset.threadRoot = String(message.seq);
     const channel = S.channel.id, summary = T.summaries.get(threadKey(channel, message.seq));
-    button.textContent = replyLabel(summary);
+    updateReplyButtonContent(button, summary);
     button.classList.toggle("has-replies", !!summary?.replyCount);
     button.classList.toggle("has-updates", !!(summary?.participating && summary?.unreadCount));
     button.onclick = () => openThread(channel, message.seq).catch(error=>note(error.message,true));
@@ -159,7 +166,7 @@ function replyButton(message) {
 function updateReplyButtons() {
     document.querySelectorAll("#messages [data-thread-root]").forEach((button) => {
         const summary = T.summaries.get(threadKey(S.channel?.id, button.dataset.threadRoot));
-        button.textContent = replyLabel(summary);
+        updateReplyButtonContent(button, summary);
         button.classList.toggle("has-replies", !!summary?.replyCount);
         button.classList.toggle("has-updates", !!(summary?.participating && summary?.unreadCount));
     });

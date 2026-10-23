@@ -1484,10 +1484,10 @@ S.typers = new Map();
 S.typingScope = null;
 S.typingHeartbeat = null;
 const reactionOptions = [
-    ["ack", "hand-thumbs-up", "了解"],
-    ["done", "check-circle", "完了"],
-    ["eyes", "hourglass-split", "確認中"],
     ["thanks", "heart", "感謝"],
+    ["ack", "hand-thumbs-up", "了解"],
+    ["eyes", "hourglass-split", "確認中"],
+    ["done", "check-circle", "完了"],
 ];
 
 function sendRealtime(event) {

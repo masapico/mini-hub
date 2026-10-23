@@ -547,6 +547,10 @@ func TestReplyActionSharesTheReactionRow(t *testing.T) {
 			t.Fatalf("inline reply action stylesheet does not contain %q", expected)
 		}
 	}
+	threadScript := request(t, handler, "/js/threads.js").Body.String()
+	if !strings.Contains(threadScript, `chat-left-text`) {
+		t.Fatal("threads.js does not contain chat-left-text icon for reply button")
+	}
 }
 
 func TestApplicationRendersConfiguredNetworkPathMode(t *testing.T) {
@@ -882,6 +886,10 @@ func TestReactionPickerInteractionRules(t *testing.T) {
 	if strings.Contains(script, `["eyes", "eye", "確認中"]`) {
 		t.Fatal("確認中リアクションが従来の目のアイコンのままです")
 	}
+	wantOptions := "const reactionOptions = [\n    [\"thanks\", \"heart\", \"感謝\"],\n    [\"ack\", \"hand-thumbs-up\", \"了解\"],\n    [\"eyes\", \"hourglass-split\", \"確認中\"],\n    [\"done\", \"check-circle\", \"完了\"],\n];"
+	if !strings.Contains(strings.ReplaceAll(script, "\r\n", "\n"), wantOptions) {
+		t.Fatal("reaction options order should be thanks, ack, eyes, done")
+	}
 }
 
 func TestReactionUsersAreLoadedOnDemand(t *testing.T) {
@@ -1062,5 +1070,45 @@ func TestMentionStylesAndClassNames(t *testing.T) {
 	threadJS := request(t, handler, "/js/thread-mentions.js").Body.String()
 	if !strings.Contains(threadJS, "mention-ai") || !strings.Contains(threadJS, "mention-user") {
 		t.Fatal("thread-mentions.js does not contain mention-ai or mention-user class names")
+	}
+}
+
+func TestHelpButtonAndModalAreEmbedded(t *testing.T) {
+	handler := Handler(testAuthenticator(true))
+	body := request(t, handler, "/").Body.String()
+
+	if !strings.Contains(body, `id="helpButton"`) {
+		t.Fatal("help button is missing")
+	}
+	if !strings.Contains(body, `data-bs-target="#helpModal"`) {
+		t.Fatal("help button target modal is missing")
+	}
+	if !strings.Contains(body, `bootstrap-icons.svg#question-circle`) {
+		t.Fatal("help button question-circle icon is missing")
+	}
+	if !strings.Contains(body, `id="helpModal"`) {
+		t.Fatal("help modal is missing")
+	}
+	if !strings.Contains(body, `id="helpModalTitle"`) {
+		t.Fatal("help modal title is missing")
+	}
+	if !strings.Contains(body, `class="modal-body help-modal-body"`) {
+		t.Fatal("help modal body is missing")
+	}
+
+	notificationsIdx := strings.Index(body, `id="notifications"`)
+	helpBtnIdx := strings.Index(body, `id="helpButton"`)
+	if notificationsIdx == -1 || helpBtnIdx == -1 || helpBtnIdx < notificationsIdx {
+		t.Fatalf("help button should be placed after notifications button: notificationsIdx=%d, helpBtnIdx=%d", notificationsIdx, helpBtnIdx)
+	}
+
+	chatCSS := request(t, handler, "/css/chat.css").Body.String()
+	if !strings.Contains(chatCSS, ".app #helpButton { order: 2; }") {
+		t.Fatal("chat.css does not contain mobile ordering for #helpButton")
+	}
+
+	appCSS := request(t, handler, "/css/app.css").Body.String()
+	if !strings.Contains(appCSS, ".help-modal") || !strings.Contains(appCSS, ".help-modal-body") {
+		t.Fatal("app.css does not contain styles for help modal")
 	}
 }
