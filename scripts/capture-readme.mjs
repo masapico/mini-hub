@@ -49,8 +49,8 @@ try {
             const content = typeof last?.content === 'string' ? last.content : JSON.stringify(last?.content || '');
             if (content.includes('表形式') || content.includes('整理') || content.includes('キャンバス')) {
                 reply = '### 受付フロー改善案の要約\n\nご提示いただいた改善案の要点を整理しました。\n\n| 項目 | 現行フロー | 改善案 |\n| --- | --- | --- |\n| 入力項目 | 12項目（手動入力） | 5項目（必須のみ厳選） |\n| 一次対応 | 担当者へ個別連絡 | チャンネルへ自動通知 |\n| 平均処理時間 | 約15分 | 約5分（約65%削減） |\n\nチーム内で共有して試行を進めてください。';
-            } else if (content.includes('要約') || content.includes('ポイント')) {
-                reply = '新しい受付フローの改善案を確認しました。主な要点は以下の3点です：\n\n1. **入力項目の厳選**: 必須項目を絞り込み、入力負担を大幅に削減します。\n2. **通知の自動化**: 受付内容をチャンネルへ即時連携し、対応の重複を防ぎます。\n3. **チーム先行試行**: まずは営業チームで試行し、気づいた点をフィードバックします。';
+            } else if (content.includes('要確認') || content.includes('申請') || content.includes('要約') || content.includes('ポイント')) {
+                reply = '要確認案件（2件）の確認手順を整理しました：\n\n1. **住民票記載事項の突合**: 添付の世帯票と直近の変更届の異動日を照合します。\n2. **給付要件の再判定**: 世帯分離後の所得基準を満たしているか確認します。\n3. **申請者への連絡**: 不足書類がある場合は専用テンプレートで案内を送付します。';
             }
         } catch {}
         res.writeHead(200, {'Content-Type': 'application/json'});
@@ -114,33 +114,49 @@ try {
         await api(admin, '/api/channels', 'POST', {id, name, type: 'public'});
         for (const user of users) await api(user, `/api/channels/${id}/join`, 'POST');
     }
+    const webhookRes = await api(admin, '/api/admin/webhooks', 'POST', {
+        name: '申請受付RPA', channelId: 'project',
+        description: '申請対象者・世帯チェックの自動バッチ連携', enabled: true,
+    });
     const post = (user, text) => api(user, '/api/channels/project/messages', 'POST', {text});
     await post(users[1], '今週の業務改善プロジェクトの進捗を共有します。');
-    const topic = await post(users[2], '新しい受付フローの案をまとめました。\nまずは営業チームで試して、気づいた点をこのスレッドで共有しませんか？');
+
+    // RPA Webhook による自動通知
+    await fetch(`${base}/api/webhooks/${webhookRes.webhook.id}/${webhookRes.token}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            text: '【自動処理完了】申請対象者・世帯チェック（バッチ #042）が完了しました。\n対象件数: 45件（正常完了: 43件、要確認: 2件）\n確認用リストを共有フォルダに出力しました。要確認案件の確認をお願いします。'
+        }),
+    });
+    const pageMsgs = await api(users[0], '/api/channels/project/messages');
+    const whMsg = pageMsgs.messages.find(m => m.webhook);
+    if (whMsg) {
+        await api(users[0], `/api/channels/project/messages/${whMsg.seq}/reactions/ack`, 'PUT');
+    }
+
+    // AIメンションとチーム対話のスレッド
+    const topic = await post(users[2], '要確認案件への対応方針と確認手順をまとめました。\nAIアシスタントに確認手順の要点を整理してもらっています。');
     await api(users[0], `/api/channels/project/messages/${topic.seq}/reactions/ack`, 'PUT');
     await api(users[1], `/api/channels/project/messages/${topic.seq}/reactions/thanks`, 'PUT');
-    for (const [user, text] of [
-        [users[1], 'いいですね！入力項目を減らせそうです。'],
-        [users[0], '確認しました。来週から試行できるように準備します。'],
-        [users[2], 'ありがとうございます。試行後に改善点をまとめましょう。'],
-    ]) await api(user, `/api/channels/project/threads/${topic.seq}/messages`, 'POST', {text});
-    
-    // AI thread
-    const aiTopic = await post(users[0], '受付フローの改善案について、AIアシスタントに要点をまとめてもらいました。');
-    await api(users[0], `/api/channels/project/threads/${aiTopic.seq}/messages`, 'POST', {
-        text: '@ai:assistant（社内アシスタント） 新しい受付フローの改善案を3点に要約してください。'
+
+    await api(users[2], `/api/channels/project/threads/${topic.seq}/messages`, 'POST', {
+        text: '@ai:assistant（社内アシスタント） 申請書類の要確認案件（住所変更・世帯分離）について、確認手順の要点を3点に要約してください。'
     });
     for (let i = 0; i < 50; i++) {
-        const page = await api(users[0], `/api/channels/project/threads/${aiTopic.seq}/messages`);
+        const page = await api(users[0], `/api/channels/project/threads/${topic.seq}/messages`);
         if (page?.messages?.some(m => m.ai)) break;
         await pause(100);
     }
+    await api(users[0], `/api/channels/project/threads/${topic.seq}/messages`, 'POST', {
+        text: '確認手順ありがとうございます！午前中に2件の突合を進めます。'
+    });
 
     await post(users[0], '打ち合わせの日程と、次に取り組むテーマも相談しましょう。');
     const pollDetail = await api(users[2], '/api/polls', 'POST', {
         requestId: 'readme-demo-poll', channelId: 'project', question: '次に改善したい業務は？',
         description: '日々の業務で、特に時間がかかっているものを教えてください。',
-        options: ['問い合わせの受付', '会議の準備・議事録', '社内情報の共有'], multiple: false,
+        options: ['申請書類の確認・突合', '問い合わせの受付', '社内情報の共有'], multiple: false,
     });
     const poll = pollDetail.poll;
     for (let i = 0; i < users.length; i++) await api(users[i], `/api/polls/${poll.id}/vote`, 'PUT', {
@@ -243,15 +259,13 @@ try {
     await run("select('project')");
     await wait("S.channel?.id === 'project' && document.querySelector('#messages .poll-card')");
     
-    // 1. チャット画面（スレッド表示）
+    // 1. メッセージハブ画面（タイムライン + AI協調スレッド表示）
     await run(`openThread('project', ${topic.seq})`);
-    await wait("typeof T !== 'undefined' && T.current?.messages.length === 3 && document.querySelectorAll('#threadMessages .message').length === 4");
+    await wait("typeof T !== 'undefined' && T.current?.messages.length === 3 && T.current?.messages.some(m => m.ai) && document.querySelectorAll('#threadMessages .message').length === 4");
+    await run("document.getElementById('messages').scrollTop = 0");
     await capture('chat.png');
-    await run('closeThread()');
 
     // 2. AI連携画面（スレッドでのAI回答）
-    await run(`openThread('project', ${aiTopic.seq})`);
-    await wait("typeof T !== 'undefined' && T.current?.messages.some(m => m.ai) && document.querySelectorAll('#threadMessages .message').length >= 2");
     await capture('ai.png');
     await run('closeThread()');
 

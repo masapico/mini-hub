@@ -47,7 +47,7 @@ go build -o /tmp/minihub-readme ./cmd/minihub
 BROWSER_PATH=/usr/bin/chromium node scripts/capture-readme.mjs /tmp/minihub-readme
 ```
 
-ブラウザの既定値はWindowsでMicrosoft Edge、macOSでGoogle Chrome、Linuxで`chromium`です。専用の一時データとローカルサーバーで架空の会話・スレッドAI連携・アンケート・AIキャンバス・予定調整を作成し、一般ユーザーの実画面を日本語・日本時間、1440×1000、倍率1で撮影します。予定の候補日は撮影日の翌週に生成します。既存の設定・データは使用しません。
+ブラウザの既定値はWindowsでMicrosoft Edge、macOSでGoogle Chrome、Linuxで`chromium`です。専用の一時データとローカルサーバーで架空の会話・RPA連携・スレッドAI連携・アンケート・AIキャンバス・予定調整を作成し、一般ユーザーの実画面を日本語・日本時間、1440×1000、倍率1で撮影します。予定の候補日は撮影日の翌週に生成します。既存の設定・データは使用しません。
 
 予定調整は集計表が見切れないようページ全体を撮影します。全画面の撮影がすべて成功すると `docs/images/chat.png`、`ai.png`、`poll.png`、`ai-canvas.png`（`canvas.png`）、`schedule.png` を更新します。撮影に失敗した場合は掲載画像を更新せず、起動したサーバー・ブラウザと一時データを片付けます。
 
