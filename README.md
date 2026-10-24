@@ -1,6 +1,8 @@
-# MiniHub
+# mini-hub
 
-`MiniHub` は、人・AI・外部システムをつなぐ、シンプルなプライベート・メッセージハブです。
+[![CI](https://github.com/masapico/mini-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/masapico/mini-hub/actions/workflows/ci.yml)
+
+`mini-hub` は、人・AI・外部システムをつなぐ、シンプルなプライベート・メッセージハブです。
 
 単一の Go サービスとして動作し、外部DBサーバーを使わず組み込みSQLiteへデータを保存します。チーム内の対話、各種システムからの通知、そしてAIアシスタントとの協調を1つの場所に集約します。
 
@@ -13,7 +15,7 @@ flowchart TB
         A["🤖 AI協調<br/>(AI Integration)<br/>llama.cpp / OpenAI互換"]
     end
 
-    subgraph HUB["MiniHub コアエンジン"]
+    subgraph HUB["mini-hub"]
         direction TB
         ROUTER["メッセージハブ<br/>認証・認可・レート制限・リアルタイム配信"]
     end
@@ -28,7 +30,7 @@ flowchart TB
     ROUTER --- DB
 ```
 
-[![チーム対話・外部システム通知・AI協調を1つの場所に集約したMiniHubの画面](docs/images/chat.png)](docs/images/chat.png)
+[![チーム対話・外部システム通知・AI協調を1つの場所に集約したmini-hubの画面](docs/images/chat.png)](docs/images/chat.png)
 
 チーム内の対話、外部システム（RPAや監視ツール等）からの自動通知（Incoming Webhook）、そしてAIアシスタントとの協調を1つの場所に集約できます。話題ごとのスレッドで深掘りし、リアクションで素早く意思疎通できます。
 
