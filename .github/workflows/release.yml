@@ -31,8 +31,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/*.tar.gz
-            dist/*.zip
-            dist/SHA256SUMS.txt
+            dist/${{ github.ref_name }}/*.tar.gz
+            dist/${{ github.ref_name }}/*.zip
+            dist/${{ github.ref_name }}/SHA256SUMS.txt
           generate_release_notes: true
 
