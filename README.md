@@ -1,6 +1,8 @@
 # mini-hub
 
 [![CI](https://github.com/masapico/mini-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/masapico/mini-hub/actions/workflows/ci.yml)
+[![RELEASE](https://github.com/masapico/mini-hub/actions/workflows/release.yml/badge.svg)](https://github.com/masapico/mini-hub/actions/workflows/release.yml)
+
 
 `mini-hub` は、人・AI・外部システムをつなぐ、シンプルなプライベート・メッセージハブです。
 
