@@ -13,8 +13,8 @@ flowchart TB
     subgraph SOURCES["3つの対話・情報ソース"]
         direction LR
         H["👤 チーム対話<br/>(Human Collaboration)<br/>ブラウザ / WebSocket"]
-        S["⚙️ 外部システム<br/>(Incoming Webhook)<br/>CI/CD / 監視 / バッチ"]
-        A["🤖 AI協調<br/>(AI Integration)<br/>llama.cpp / OpenAI互換"]
+        S["⚙️ 外部システム<br/>(Incoming Webhook)<br/>CI/CD / 監視 / バッチ・RPA"]
+        A["🤖 AI協調<br/>(AI Integration)<br/>ローカルLLM・llama.cpp等"]
     end
 
     subgraph HUB["mini-hub"]
