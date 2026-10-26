@@ -1,4 +1,5 @@
 const S = {
+        basePath: (typeof Minihub !== "undefined" && Minihub.basePath) || document.documentElement?.dataset?.basePath || "",
         csrf: "",
         me: null,
         channels: [],

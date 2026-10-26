@@ -1235,7 +1235,7 @@ function selectManagedWebhook(id) {
 
 function displayCreatedWebhookNotice(webhookID, rawToken) {
     const origin = window.location.origin;
-    const basePath = S.basePath || "";
+    const basePath = (typeof Minihub !== "undefined" && Minihub.basePath) || (typeof S !== "undefined" && S.basePath) || "";
     const url = `${origin}${basePath}/api/webhooks/${webhookID}/${rawToken}`;
     const curlCmd = `curl -X POST -H "Content-Type: application/json" -d '{"text": "外部システムからのテスト通知です"}' "${url}"`;
     const psCmd = `Invoke-RestMethod -Uri "${url}" -Method Post -ContentType "application/json" -Body '{"text": "外部システムからのテスト通知です"}'`;

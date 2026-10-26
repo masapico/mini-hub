@@ -1028,6 +1028,9 @@ func TestWebhookAdminUIEmbedded(t *testing.T) {
 	if !strings.Contains(appScript, "message.webhook") {
 		t.Fatal("app.js does not handle message.webhook")
 	}
+	if !strings.Contains(appScript, "basePath:") {
+		t.Fatal("app.js does not define basePath on state")
+	}
 
 	adminScript := request(t, Handler(testAuthenticator(false)), "/js/admin.js").Body.String()
 	for _, expected := range []string{
@@ -1035,6 +1038,7 @@ func TestWebhookAdminUIEmbedded(t *testing.T) {
 		"displayCreatedWebhookNotice",
 		"copyWebhookCurl",
 		"copyWebhookPowershell",
+		"Minihub.basePath",
 	} {
 		if !strings.Contains(adminScript, expected) {
 			t.Fatalf("admin.js does not contain %q", expected)

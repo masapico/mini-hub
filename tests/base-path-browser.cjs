@@ -145,6 +145,14 @@ async function waitForService(url, child) {
                 assert.equal(new URL(editor.url()).searchParams.get('channelId'), 'general');
                 await editor.close();
                 await page.evaluate(() => document.body.append(svgIcon('folder')));
+                await page.evaluate(() => displayCreatedWebhookNotice('wh-test', 'token-test'));
+                const webhookURL = await page.locator('#createdWebhookURL').inputValue();
+                const webhookCurl = await page.locator('#createdWebhookCurl').inputValue();
+                const webhookPowershell = await page.locator('#createdWebhookPowershell').inputValue();
+                const expectedWebhookURL = `${origin}${basePath}/api/webhooks/wh-test/token-test`;
+                assert.equal(webhookURL, expectedWebhookURL);
+                assert(webhookCurl.includes(expectedWebhookURL), `curl should include ${expectedWebhookURL}`);
+                assert(webhookPowershell.includes(expectedWebhookURL), `powershell should include ${expectedWebhookURL}`);
                 await api('/api/channels/general/messages', 'POST', {text: 'プロキシ経由のリアルタイム投稿'});
                 await page.waitForFunction(() => S.msgs.some(m => m.text === 'プロキシ経由のリアルタイム投稿'));
                 await page.evaluate(() => { window.previousSocket = S.ws; S.ws.close(); });
