@@ -249,7 +249,19 @@ const MAX_MESSAGE_BYTES = 16 * 1024,
     textEncoder = new TextEncoder(),
     networkPathMode = document.body.dataset.networkPathMode || "copy";
 
+function stripEnclosingQuotes(value) {
+    let s = (value || "").trim();
+    while (
+        (s.startsWith('"') && s.endsWith('"') && s.length >= 2) ||
+        (s.startsWith("'") && s.endsWith("'") && s.length >= 2)
+    ) {
+        s = s.slice(1, -1).trim();
+    }
+    return s;
+}
+
 function safeLinkURL(value) {
+    value = stripEnclosingQuotes(value);
     const windowsPath = value.replaceAll("¥", "\\");
     if (windowsPath.startsWith("\\\\")) {
         const parts = windowsPath.slice(2).split("\\"),
@@ -2434,6 +2446,19 @@ function openEditorLink(root) {
 $("linkButton").onclick = () => openEditorLink(editor);
 
 $("linkModal").addEventListener("shown.bs.modal", () => $("linkURL").focus());
+$("linkURL").addEventListener("paste", (event) => {
+    const text = event.clipboardData?.getData("text");
+    if (!text) return;
+    const stripped = stripEnclosingQuotes(text);
+    if (stripped !== text) {
+        event.preventDefault();
+        const input = event.currentTarget;
+        const start = input.selectionStart ?? 0;
+        const end = input.selectionEnd ?? 0;
+        input.setRangeText(stripped, start, end, "end");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+});
 $("linkModal").addEventListener("hidden.bs.modal", () => {
     const target = S.linkEditor;
     S.linkRange = null;
@@ -2452,8 +2477,9 @@ function restoreLinkRange() {
 
 $("linkForm").onsubmit = (event) => {
     event.preventDefault();
-    const enteredURL = $("linkURL").value.trim(),
+    const enteredURL = stripEnclosingQuotes($("linkURL").value),
         href = insertableLinkURL(enteredURL);
+    $("linkURL").value = enteredURL;
     $("linkURL").classList.toggle("is-invalid", !href);
     if (!href || !restoreLinkRange()) return;
     const range = S.linkRange;

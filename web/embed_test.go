@@ -386,10 +386,14 @@ func TestApplicationIncludesRestrictedRichTextComposer(t *testing.T) {
 		`id="linkButton"`,
 		`aria-label="送信（Ctrl+Enter）"`,
 		`id="linkModal"`,
+		`id="linkModal" tabindex="-1" aria-labelledby="linkModalTitle" aria-hidden="true"><div class="modal-dialog modal-dialog-centered">`,
 	} {
 		if !strings.Contains(page, expected) {
 			t.Fatalf("rich text composer does not contain %q", expected)
 		}
+	}
+	if strings.Contains(page, `id="linkModal" tabindex="-1" aria-labelledby="linkModalTitle" aria-hidden="true"><div class="modal-dialog modal-sm`) {
+		t.Fatal("link modal still has modal-sm")
 	}
 	if strings.Contains(page, "data-mark=\"`\"") || strings.Contains(page, `aria-label="コード"`) {
 		t.Fatal("composer still offers the code formatting control")
@@ -401,7 +405,10 @@ func TestApplicationIncludesRestrictedRichTextComposer(t *testing.T) {
 	script := request(t, handler, "/js/app.js").Body.String()
 	for _, expected := range []string{
 		`function serializeEditorNode(node)`,
+		`function stripEnclosingQuotes(value)`,
 		`function safeLinkURL(value)`,
+		`stripEnclosingQuotes($("linkURL").value)`,
+		`stripEnclosingQuotes(text)`,
 		`function linkDestinationLabel(href)`,
 		`function networkLocationDetails(href)`,
 		`function networkLocationIcon(extension)`,
