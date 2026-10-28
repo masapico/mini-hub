@@ -850,7 +850,7 @@ function syncEditorState() {
     }
 
     const sendBtn = $("send");
-    sendBtn.disabled = editor.disabled || over || attachWithoutAI || multiAI;
+    sendBtn.disabled = editor.disabled || !text.trim() || over || attachWithoutAI || multiAI;
     if (multiAI) {
         sendBtn.title = "AIへのメンションは1メッセージにつき1件のみ指定できます";
     } else if (attachWithoutAI) {

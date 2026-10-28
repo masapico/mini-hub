@@ -41,44 +41,24 @@
   margin-bottom: -1px;
 }
 
-/* 非フォーカス時の送信ボタン：目立ちすぎない落ち着いたスタイル（本文・スレッド共通） */
+/* 送信ボタンの状態は入力内容で決める（空なら disabled）。色は DADS の .btn-primary / .btn:disabled に任せ、
+   フォーカスの有無では変えない。 */
 .app .composer .tools #send,
 .thread-tools #threadSend {
-  background-color: var(--color-primitive-solid-gray-100, #f1f5f9);
-  border: 1px solid var(--color-primitive-solid-gray-300, #cbd5e1);
-  color: var(--dads-text-secondary, #475569);
   box-shadow: none;
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.app .composer .tools #send:hover:not(:disabled),
-.thread-tools #threadSend:hover:not(:disabled) {
-  background-color: var(--color-primitive-solid-gray-200, #e2e8f0);
-  border-color: var(--color-primitive-solid-gray-400, #94a3b8);
-  color: var(--dads-text-primary, #0f172a);
+/* 入力欄のフォーカス表示：枠をキーカラーの2pxにする。アウトラインはツールバーの背景より上に描かれ、
+   レイアウトも動かさない。 */
+.composer .box:focus-within,
+.thread-editor-box:focus-within {
+  --composer-focus-color: var(--color-key-900);
+  border-color: var(--composer-focus-color);
+  outline: 2px solid var(--composer-focus-color);
+  outline-offset: -1px;
 }
-
-/* 入力欄にフォーカスが入った時のみ、送信ボタンをメインカラーへ活性化（本文・スレッド連動） */
-.composer .box:focus-within .tools #send:not(:disabled),
-.thread-editor-box:focus-within .thread-tools #threadSend:not(:disabled) {
-  background-color: var(--color-key-900, #002b80);
-  border-color: var(--color-key-900, #002b80);
-  color: #ffffff;
-}
-
-.composer .box:focus-within .tools #send:hover:not(:disabled),
-.thread-editor-box:focus-within .thread-tools #threadSend:hover:not(:disabled) {
-  background-color: var(--color-key-800, #19468e);
-  border-color: var(--color-key-800, #19468e);
-  color: #ffffff;
-}
-
-.composer .box:focus-within .tools #send:active:not(:disabled),
-.thread-editor-box:focus-within .thread-tools #threadSend:active:not(:disabled) {
-  background-color: var(--color-key-700, #1b57b8);
-  border-color: var(--color-key-700, #1b57b8);
-  color: #ffffff;
-}
+.ai-canvas-composer .thread-editor-box:focus-within { --composer-focus-color: #7c3aed; }
 
 .composer .box:focus-within .tools #send {
   box-shadow: -8px 0 8px var(--color-key-50, #f2f6fc);
@@ -88,7 +68,7 @@
   box-shadow: -6px 0 6px var(--color-key-50, #f2f6fc);
 }
 
-/* 入力エリア単体の余分なシャドウ・アウトラインを抑え、ツールバー上部の背景色変化にフォーカス表現を統一 */
+/* フォーカス表示は入力欄全体の枠で行うため、編集領域単体のアウトラインは出さない */
 .app .message-editor:focus,
 .thread-message-editor:focus {
   outline: none;

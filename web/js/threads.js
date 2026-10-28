@@ -68,7 +68,7 @@ function syncThreadEditorState() {
     }
 
     const sendBtn = $("threadSend");
-    sendBtn.disabled = !canPost || T.current?.sending || T.current?.loading || attachWithoutAI || multiAI;
+    sendBtn.disabled = !canPost || T.current?.sending || T.current?.loading || !text.trim() || attachWithoutAI || multiAI;
     if (multiAI) {
         sendBtn.title = "AIへのメンションは1メッセージにつき1件のみ指定できます";
     } else if (attachWithoutAI) {
@@ -206,7 +206,7 @@ function updateThreadControls() {
         } else {
             sendBtn.textContent = "送信";
         }
-        sendBtn.disabled = !canPost || T.current.sending || T.current.loading || attachWithoutAI || multiAI;
+        sendBtn.disabled = !canPost || T.current.sending || T.current.loading || !text.trim() || attachWithoutAI || multiAI;
         if (multiAI) {
             sendBtn.title = "AIへのメンションは1メッセージにつき1件のみ指定できます";
         } else if (attachWithoutAI) {

@@ -258,12 +258,25 @@ func TestDigitalAgencyDesignSystemIsEmbedded(t *testing.T) {
 	chatCSS := request(t, handler, "/css/chat.css").Body.String()
 	for _, expected := range []string{
 		".composer .box:focus-within .tools",
-		".composer .box:focus-within .tools #send:not(:disabled)",
-		".thread-editor-box:focus-within .thread-tools #threadSend:not(:disabled)",
+		".composer .box:focus-within,\n.thread-editor-box:focus-within {",
+		"outline: 2px solid var(--composer-focus-color);",
 	} {
 		if !strings.Contains(chatCSS, expected) {
 			t.Fatalf("chat.css missing %q", expected)
 		}
+	}
+	// The send buttons follow the input content, not focus: they stay DADS primary while
+	// enabled and are disabled only when there is nothing (valid) to send.
+	if strings.Contains(chatCSS, "focus-within .tools #send:not(:disabled)") {
+		t.Fatal("send button colour must not depend on composer focus")
+	}
+	appScript := request(t, handler, "/js/app.js").Body.String()
+	if !strings.Contains(appScript, "sendBtn.disabled = editor.disabled || !text.trim() ||") {
+		t.Fatal("main send button is not disabled for empty input")
+	}
+	threadScript := request(t, handler, "/js/threads.js").Body.String()
+	if strings.Count(threadScript, "!text.trim() || attachWithoutAI || multiAI;") != 2 {
+		t.Fatal("thread send button is not disabled for empty input")
 	}
 
 	// Every page loads the layer order first; it pulls Bootstrap into the lowest component layer.

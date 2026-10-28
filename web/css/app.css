@@ -1965,16 +1965,24 @@ label.channel-membership-row { cursor: pointer; }
 .btn:focus-visible,
 .iconbtn:focus-visible,
 .fmt:focus-visible,
-.channel:focus-visible,
 .admin-toggle:focus-visible,
 .admin-button:focus-visible,
+.schedule-message-link:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+/* Full-width rows sit inside scrolling lists; an inset ring is not clipped by their overflow. */
+.channel:focus-visible,
 .user:focus-visible,
 .group-row:focus-visible,
 .mention-option:focus-visible,
 .notification-item:focus-visible,
-.schedule-message-link:focus-visible {
+.managed-channel-row:focus-visible,
+.thread-list-row:focus-visible,
+.sidebar-links :is(a, button):focus-visible,
+.app .message:focus-visible {
     outline: 2px solid var(--focus);
-    outline-offset: 2px;
+    outline-offset: -2px;
 }
 }
 @layer base {
