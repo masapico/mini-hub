@@ -1,3 +1,4 @@
+@layer tokens {
 /* Shared visual language for chat and scheduling (Integrated with Digital Agency Design System). */
 :root {
     /* Digital Agency Design System (DADS) Key & Semantic Colors */
@@ -20,4 +21,5 @@
     --fs-sm: 13px;
     --fs-md: 14px;
     --fs-lg: 16px;
+}
 }

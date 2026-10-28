@@ -95,7 +95,7 @@ func TestHandlerSeparatesLoginAndApplication(t *testing.T) {
 		if !strings.Contains(passwordButton, `viewBox="0 0 16 16"`) || strings.Contains(passwordButton, `<use`) {
 			t.Fatal("password-change key icon is not embedded in its button")
 		}
-		for _, expected := range []string{"bootstrap.min.css", "bootstrap.bundle.min.js", "bootstrap-icons.svg", "marked.min.js", `id="threadResizer"`, `id="threadExpandBtn"`, `id="toastContainer"`, `class="modal fade"`, `/favicon.svg`, `/favicon.ico`, `name="theme-color" content="#334155"`} {
+		for _, expected := range []string{"css/layers.css", "bootstrap.bundle.min.js", "bootstrap-icons.svg", "marked.min.js", `id="threadResizer"`, `id="threadExpandBtn"`, `id="toastContainer"`, `class="modal fade"`, `/favicon.svg`, `/favicon.ico`, `name="theme-color" content="#334155"`} {
 			if !strings.Contains(body, expected) {
 				t.Fatalf("application HTML does not contain %q", expected)
 			}
@@ -163,6 +163,7 @@ func TestHandlerRendersConfiguredUIStringsSafely(t *testing.T) {
 func TestHandlerServesEmbeddedAssets(t *testing.T) {
 	handler := Handler(testAuthenticator(false))
 	for _, path := range []string{
+		"/css/layers.css",
 		"/css/app.css",
 		"/css/dads-tokens.css",
 		"/css/dads-components.css",
@@ -243,12 +244,43 @@ func TestDigitalAgencyDesignSystemIsEmbedded(t *testing.T) {
 		"var(--color-key-900)",
 		".channel-member-tabs",
 		".poll-card",
+		"@layer dads {",
+	} {
+		if !strings.Contains(componentsCSS, expected) {
+			t.Fatalf("dads-components.css missing %q", expected)
+		}
+	}
+	if strings.Contains(componentsCSS, "!important") {
+		t.Fatal("dads-components.css must rely on cascade layers instead of !important")
+	}
+
+	// Composer focus feedback is a chat component built on DADS tokens.
+	chatCSS := request(t, handler, "/css/chat.css").Body.String()
+	for _, expected := range []string{
 		".composer .box:focus-within .tools",
 		".composer .box:focus-within .tools #send:not(:disabled)",
 		".thread-editor-box:focus-within .thread-tools #threadSend:not(:disabled)",
 	} {
-		if !strings.Contains(componentsCSS, expected) {
-			t.Fatalf("dads-components.css missing %q", expected)
+		if !strings.Contains(chatCSS, expected) {
+			t.Fatalf("chat.css missing %q", expected)
+		}
+	}
+
+	// Every page loads the layer order first; it pulls Bootstrap into the lowest component layer.
+	layersCSS := request(t, handler, "/css/layers.css").Body.String()
+	for _, expected := range []string{
+		"@layer base, bootstrap, tokens, dads, app;",
+		`@import url("../vendor/bootstrap/bootstrap.min.css") layer(bootstrap);`,
+	} {
+		if !strings.Contains(layersCSS, expected) {
+			t.Fatalf("layers.css missing %q", expected)
+		}
+	}
+	for name, html := range map[string]string{"app": appHTML, "login": loginHTML, "schedule": scheduleHTML} {
+		layers := strings.Index(html, `/css/layers.css"`)
+		tokens := strings.Index(html, `/css/dads-tokens.css"`)
+		if layers < 0 || tokens < 0 || layers > tokens {
+			t.Fatalf("%s HTML must load layers.css before the other stylesheets", name)
 		}
 	}
 
@@ -1052,7 +1084,6 @@ func TestWebhookAdminUIEmbedded(t *testing.T) {
 		}
 	}
 }
-
 
 func TestMentionStylesAndClassNames(t *testing.T) {
 	handler := Handler(testAuthenticator(false))

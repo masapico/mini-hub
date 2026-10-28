@@ -83,3 +83,17 @@ Web画面、Bootstrap、Bootstrap Icons、faviconはGoの実行ファイルへ�
 - Bootstrap Icons 1.13.1
 
 配布用のCSS、JavaScript、SVG spriteとライセンスを `web/vendor/` に同梱しています。実行時にnpmやインターネット接続は使用しません。
+
+## スタイルシートの構成
+
+全ページは最初に `web/css/layers.css` を読み込み、CSSカスケードレイヤーの優先順位を宣言します。後のレイヤーはセレクターの詳細度に関係なく前のレイヤーに優先するため、上書きに `!important` を使いません。
+
+| レイヤー | ファイル | 内容 |
+| --- | --- | --- |
+| `base` | `app.css`、`schedule.css` の一部 | `*`、フォーム要素の `font: inherit`、`:disabled` など要素単位の初期化 |
+| `bootstrap` | `vendor/bootstrap/bootstrap.min.css`（`layers.css` から読み込み） | Bootstrap本体 |
+| `tokens` | `dads-tokens.css`、`theme.css` | デジタル庁デザインシステム（DADS）と画面共通のデザイントークン |
+| `dads` | `dads-components.css` | フォーム、ボタン、モーダル、表、管理画面などのDADSコンポーネント |
+| `app` | `app.css`、`chat.css`、`threads.css`、`polls.css`、`schedule.css` | チャット、スレッド、アンケート、予定調整などの画面固有の表示 |
+
+DADSはBootstrapのCSS変数（`--bs-btn-border-radius`、`--bs-border-radius`、`--bs-danger-rgb` など）を通じて適用し、入力グループやボタングループの角丸処理をBootstrapに任せます。`app` レイヤーで下位レイヤーの値に戻す場合は `revert-layer` を使います。

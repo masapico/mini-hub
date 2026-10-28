@@ -1,3 +1,4 @@
+@layer tokens {
 /**
  * デジタル庁デザインシステム（DADS）デザイントークン
  * Digital Agency Design System Tokens
@@ -68,6 +69,10 @@
   --color-primitive-yellow-800: #713f12;
   --color-primitive-yellow-900: #422006;
 
+  /* Bootstrap integration: utilities such as .text-danger are !important in the
+     bootstrap layer, so DADS colors are supplied through Bootstrap's variables. */
+  --bs-danger-rgb: 200, 30, 30;
+
   /* Key Color (DADS Default: Blue 900) */
   --color-key-900: var(--color-primitive-blue-900);
   --color-key-800: var(--color-primitive-blue-800);
@@ -126,4 +131,4 @@
   /* Poll Chart Colors */
   --poll-bar-color: #0d9488;
 }
-
+}

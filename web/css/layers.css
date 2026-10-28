@@ -1,0 +1,12 @@
+/*
+ * Cascade layer order for every page. Later layers win regardless of selector
+ * specificity, so overrides never need !important:
+ *   base      - element-level resets (app.css, schedule.css); everything else overrides them
+ *   bootstrap - vendor base styles
+ *   tokens    - design tokens (dads-tokens.css, theme.css); custom properties only
+ *   dads      - Digital Agency Design System components for forms, modals, tables and admin screens
+ *   app       - application screens: chat, threads, polls, schedule (app.css and later)
+ * This file must be the first stylesheet on the page.
+ */
+@layer base, bootstrap, tokens, dads, app;
+@import url("../vendor/bootstrap/bootstrap.min.css") layer(bootstrap);

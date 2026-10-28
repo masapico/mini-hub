@@ -1,3 +1,170 @@
+@layer app {
+/* ==========================================================================
+   Chat Main Area (DADS tokens, chat-specific components)
+   ========================================================================== */
+
+/* Top Header */
+.app .top {
+  border-bottom: 1px solid var(--dads-border-subtle);
+  background-color: var(--dads-bg-primary);
+}
+
+.app .top h1 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--dads-text-primary);
+}
+
+/* Composer Box (DADS border & focus feedback) */
+.composer .box,
+.thread-editor-box {
+  border: 1px solid var(--dads-border-field);
+  border-radius: var(--dads-radius-lg);
+  background-color: var(--dads-bg-primary);
+  transition: border-color 0.15s ease;
+}
+
+/* 入力欄にフォーカスが移った時は、入力欄上部（機能ボタン部分）の背景色を変えてアクティブ状態を表現 */
+.composer .tools,
+.thread-tools {
+  background-color: var(--color-primitive-solid-gray-50);
+  border-bottom: 1px solid var(--dads-border-subtle);
+  border-radius: calc(var(--dads-radius-lg) - 1px) calc(var(--dads-radius-lg) - 1px) 0 0;
+  transition: background-color 0.2s ease, border-color 0.2s ease, border-bottom-width 0.15s ease;
+}
+
+/* フォーカス時のツールバー背景色と、2pxのしっかりした境界線（気持ち太めのボーダー） */
+.composer .box:focus-within .tools,
+.thread-editor-box:focus-within .thread-tools {
+  background-color: var(--color-key-50, #f2f6fc);
+  border-bottom: 2px solid var(--color-primitive-blue-300, #a9caf6);
+  margin-bottom: -1px;
+}
+
+/* 非フォーカス時の送信ボタン：目立ちすぎない落ち着いたスタイル（本文・スレッド共通） */
+.app .composer .tools #send,
+.thread-tools #threadSend {
+  background-color: var(--color-primitive-solid-gray-100, #f1f5f9);
+  border: 1px solid var(--color-primitive-solid-gray-300, #cbd5e1);
+  color: var(--dads-text-secondary, #475569);
+  box-shadow: none;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.app .composer .tools #send:hover:not(:disabled),
+.thread-tools #threadSend:hover:not(:disabled) {
+  background-color: var(--color-primitive-solid-gray-200, #e2e8f0);
+  border-color: var(--color-primitive-solid-gray-400, #94a3b8);
+  color: var(--dads-text-primary, #0f172a);
+}
+
+/* 入力欄にフォーカスが入った時のみ、送信ボタンをメインカラーへ活性化（本文・スレッド連動） */
+.composer .box:focus-within .tools #send:not(:disabled),
+.thread-editor-box:focus-within .thread-tools #threadSend:not(:disabled) {
+  background-color: var(--color-key-900, #002b80);
+  border-color: var(--color-key-900, #002b80);
+  color: #ffffff;
+}
+
+.composer .box:focus-within .tools #send:hover:not(:disabled),
+.thread-editor-box:focus-within .thread-tools #threadSend:hover:not(:disabled) {
+  background-color: var(--color-key-800, #19468e);
+  border-color: var(--color-key-800, #19468e);
+  color: #ffffff;
+}
+
+.composer .box:focus-within .tools #send:active:not(:disabled),
+.thread-editor-box:focus-within .thread-tools #threadSend:active:not(:disabled) {
+  background-color: var(--color-key-700, #1b57b8);
+  border-color: var(--color-key-700, #1b57b8);
+  color: #ffffff;
+}
+
+.composer .box:focus-within .tools #send {
+  box-shadow: -8px 0 8px var(--color-key-50, #f2f6fc);
+}
+
+.thread-editor-box:focus-within .thread-tools #threadSend {
+  box-shadow: -6px 0 6px var(--color-key-50, #f2f6fc);
+}
+
+/* 入力エリア単体の余分なシャドウ・アウトラインを抑え、ツールバー上部の背景色変化にフォーカス表現を統一 */
+.app .message-editor:focus,
+.thread-message-editor:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Format & Icon Buttons */
+.fmt,
+.iconbtn {
+  border-radius: var(--dads-radius-sm);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.fmt:focus-visible,
+.iconbtn:focus-visible {
+  outline: var(--dads-focus-outline);
+  outline-offset: var(--dads-focus-offset);
+}
+
+/* Message Timeline & Empty States */
+.chat-empty {
+  color: var(--dads-text-secondary);
+}
+
+.chat-empty h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--dads-text-primary);
+}
+
+/* Offcanvas Panels (Notification Center & Channel Info) */
+.offcanvas {
+  border-left: 1px solid var(--dads-border-subtle);
+  box-shadow: var(--dads-shadow-lg);
+}
+
+.offcanvas-header {
+  border-bottom: 1px solid var(--dads-border-subtle);
+  padding: 16px 20px;
+}
+
+.offcanvas-title {
+  font-weight: 700;
+  color: var(--dads-text-primary);
+}
+
+/* Notification Center Tabs (DADS Style) */
+#notificationCenter .nav-tabs {
+  border-bottom: 2px solid var(--dads-border-subtle);
+  gap: 8px;
+}
+
+#notificationCenter .nav-tabs .nav-link {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dads-text-secondary);
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: var(--dads-radius-sm) var(--dads-radius-sm) 0 0;
+  padding: 8px 14px;
+  background: transparent;
+}
+
+#notificationCenter .nav-tabs .nav-link:hover {
+  color: var(--color-key-900);
+  background-color: var(--color-key-50);
+}
+
+#notificationCenter .nav-tabs .nav-link.active {
+  color: var(--color-key-900);
+  border-bottom: 3px solid var(--color-key-900);
+  background-color: var(--color-key-50);
+  font-weight: 700;
+}
+
 /* Chat-specific states layered on top of the shared slate theme. */
 :where(.app, #notificationCenter) {
     --a: var(--ui-primary);
@@ -187,10 +354,6 @@
 .app .connection-status.connected::before {
     background: #15803d;
     box-shadow: none;
-}
-.app .composer .tools {
-    background: #f8fafc;
-    border-bottom-color: #cbd5e1;
 }
 .app .tools #send {
     box-shadow: -8px 0 8px #f8fafc;
@@ -892,5 +1055,4 @@
     color: #fff;
     opacity: 0.7;
 }
-
-
+}
