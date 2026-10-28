@@ -762,12 +762,14 @@ function serializeEditorNode(node) {
 }
 
 function serializeEditorChildren(parent) {
-    let value = "";
+    let value = "", afterBlock = false;
     for (const node of parent.childNodes) {
         const block = node.nodeType === Node.ELEMENT_NODE &&
             ["DIV", "P", "BLOCKQUOTE"].includes(node.tagName);
-        if (block && value && !value.endsWith("\n")) value += "\n";
+        // A block ends its line, as fragment() parses it: whatever follows starts a new line.
+        if ((block || afterBlock) && value && !value.endsWith("\n")) value += "\n";
         value += serializeEditorNode(node);
+        afterBlock = block;
     }
     return value;
 }
@@ -1384,6 +1386,27 @@ function renderNotificationCenter() {
     renderMentions();
     updateNotificationBadge();
 }
+// Channels whose unread messages include one that mentions the current user. Thread mentions
+// are left to the「返信」marker; a mention at or before the read position no longer counts.
+function updateChannelMentionMarks() {
+    const mentioned = new Set();
+    for (const mention of S.mentions) {
+        if (mention.readAt || mention.message.threadRootSeq) continue;
+        if (mention.message.seq > (S.read.get(mention.channelId)?.lastReadSeq || 0)) mentioned.add(mention.channelId);
+    }
+    const suffix = "、自分へのメンションあり";
+    for (const button of document.querySelectorAll(".channel[data-channel-id]")) {
+        const has = button.classList.contains("has-unread") && mentioned.has(button.dataset.channelId);
+        button.classList.toggle("has-mention", has);
+        const label = (button.getAttribute("aria-label") || "").replace(suffix, "");
+        button.setAttribute("aria-label", has ? label + suffix : label);
+    }
+    for (const type of ["public", "private"]) {
+        const has = !!$(type)?.querySelector(".channel.has-mention");
+        $(`${type}Unread`)?.classList.toggle("has-mention", has);
+        $(`${type}Unread`)?.setAttribute("aria-label", `未読${$(`${type}Unread`).textContent}件${has ? suffix : ""}`);
+    }
+}
 function renderMentions() {
     const host = $("mentionList");
     if (!host) return;
@@ -1411,6 +1434,7 @@ async function loadMentions(append = false) {
         S.mentionCursor = page.nextCursor || "";
         S.mentionUnread = page.unreadCount;
         renderNotificationCenter();
+        updateChannelMentionMarks();
     } catch (error) {
         if (S.me) note(`メンションを取得できません: ${error.message}`, "warning");
     }
@@ -1430,6 +1454,7 @@ async function openMention(mention) {
             mention.readAt = new Date().toISOString();
             S.mentionUnread = Math.max(0, S.mentionUnread - 1);
             renderNotificationCenter();
+            updateChannelMentionMarks();
         }
         bootstrap.Offcanvas.getOrCreateInstance($("notificationCenter")).hide();
     } catch (error) {
@@ -2672,6 +2697,7 @@ loadChannels = async function () {
         }
     }
     filterChannelList();
+    updateChannelMentionMarks();
 };
 
 function beginInitialLoading(channelID, selectionToken) {
@@ -3058,6 +3084,7 @@ render = function () {
         boundaryJustAdded = false;
         article.className =
             "message" + (continued ? " continued" : "") +
+            (m.ai ? " from-ai" : "") +
 			(m.withdrawnAt ? " withdrawn" : "") +
             (m.userId === S.me.id ? " mine" : "") +
             (mentionsMe(m.text, m.ai) ? " mentioned" : "") +
@@ -3349,8 +3376,13 @@ realtime = function () {
 		if (message.type === "channels_changed") {
             closeMainMentionMenu();
             if (typeof closeThreadMention === "function") closeThreadMention();
-			const selectedID = S.channel?.id;
+			const selectedID = S.channel?.id, selectionToken = S.selectionToken;
 			await loadChannels();
+			// A channel picked while the list reloaded wins; re-selecting the old one would undo it.
+			if (selectionToken !== S.selectionToken) {
+				syncThreads();
+				return;
+			}
 			if (selectedID && S.channels.some((channel) => channel.id === selectedID))
 				await select(selectedID);
 			else if (selectedID) clearSelectedChannel();

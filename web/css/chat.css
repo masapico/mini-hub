@@ -237,7 +237,7 @@
 .app .channel.active {
     background: #fff;
     color: #0f172a;
-    box-shadow: inset 3px 0 0 var(--color-key-900, #002b80), 0 1px 3px rgba(0, 43, 128, 0.1);
+    box-shadow: inset 3px 0 0 var(--color-key-900, #002b80);
 }
 .app .side .channel:hover:not(.active) { background: #dce6f1; }
 .app .channel.active .channel-kind { color: #475569; }
@@ -256,6 +256,20 @@
     background: var(--chat-unread);
     color: #fff;
 }
+/* Unread vs mention: a plain unread channel already has a bold name, so its count stays quiet.
+   Only a mention of the current user gets the filled badge, marked "@" so colour is not the only cue. */
+.app .channel > .tc-badge,
+.app .channel-section-unread {
+    background: var(--color-primitive-solid-gray-200);
+    color: var(--dads-text-secondary);
+}
+.app .channel.has-mention > .tc-badge,
+.app .channel-section-unread.has-mention {
+    background: var(--chat-unread);
+    color: #fff;
+}
+.app .channel.has-mention > .tc-badge::before,
+.app .channel-section-unread.has-mention::before { content: "@"; margin-right: 1px; }
 .app .avatar,
 .app .mini {
     background: #e2e8f0;
@@ -280,6 +294,8 @@
     box-shadow: none;
 }
 .app .message:hover { background: var(--ui-hover); }
+/* AI answers carry the AI accent on the left edge (mentions keep their own highlight). */
+.app .message.from-ai:not(.mentioned, .notification-target) { border-left-color: #a78bfa; }
 
 /* Message controls are compact chat controls, not 40px DADS form buttons.
    24px keeps the WCAG 2.2 minimum target size. */

@@ -42,11 +42,11 @@ function syncThreadEditorState() {
     const hasAttachments = (T.stagedAttachments || []).length > 0;
     const canPost = S.channel?.id === T.current?.channel && member(S.channel) && !S.channel.archivedAt && !T.current?.parent?.withdrawnAt;
     const attachWithoutAI = hasAttachments && !hasAI;
+    const bytes = new TextEncoder().encode(text).length, over = bytes > MAX_MESSAGE_BYTES;
 
     const limitEl = $("threadEditorLimit");
     if (limitEl) {
-        const bytes = new TextEncoder().encode(text).length;
-        if (bytes > MAX_MESSAGE_BYTES) {
+        if (over) {
             limitEl.textContent = `${bytes.toLocaleString()} / ${MAX_MESSAGE_BYTES.toLocaleString()} bytes`;
             limitEl.title = "";
         } else if (multiAI) {
@@ -68,11 +68,13 @@ function syncThreadEditorState() {
     }
 
     const sendBtn = $("threadSend");
-    sendBtn.disabled = !canPost || T.current?.sending || T.current?.loading || !text.trim() || attachWithoutAI || multiAI;
+    sendBtn.disabled = !canPost || T.current?.sending || T.current?.loading || !text.trim() || over || attachWithoutAI || multiAI;
     if (multiAI) {
         sendBtn.title = "AIへのメンションは1メッセージにつき1件のみ指定できます";
     } else if (attachWithoutAI) {
         sendBtn.title = "添付ファイルはAI宛てメッセージ（@ai:...）にのみ送信できます";
+    } else if (over) {
+        sendBtn.title = "メッセージサイズが上限を超えています";
     } else {
         sendBtn.title = "返信を送信（Ctrl+Enter）";
     }
@@ -181,11 +183,11 @@ function updateThreadControls() {
         const multiAI = aiCount > 1;
         const hasAttachments = (T.stagedAttachments || []).length > 0;
         const attachWithoutAI = hasAttachments && !hasAI;
+        const bytes = new TextEncoder().encode(text).length, over = bytes > MAX_MESSAGE_BYTES;
 
         const limitEl = $("threadEditorLimit");
         if (limitEl) {
-            const bytes = new TextEncoder().encode(text).length;
-            if (bytes > MAX_MESSAGE_BYTES) {
+            if (over) {
                 limitEl.textContent = `${bytes.toLocaleString()} / ${MAX_MESSAGE_BYTES.toLocaleString()} bytes`;
                 limitEl.title = "";
             } else if (multiAI) {
@@ -206,11 +208,13 @@ function updateThreadControls() {
         } else {
             sendBtn.textContent = "送信";
         }
-        sendBtn.disabled = !canPost || T.current.sending || T.current.loading || !text.trim() || attachWithoutAI || multiAI;
+        sendBtn.disabled = !canPost || T.current.sending || T.current.loading || !text.trim() || over || attachWithoutAI || multiAI;
         if (multiAI) {
             sendBtn.title = "AIへのメンションは1メッセージにつき1件のみ指定できます";
         } else if (attachWithoutAI) {
             sendBtn.title = "添付ファイルはAI宛てメッセージ（@ai:...）にのみ送信できます";
+        } else if (over) {
+            sendBtn.title = "メッセージサイズが上限を超えています";
         } else {
             sendBtn.title = "返信を送信（Ctrl+Enter）";
         }
@@ -280,7 +284,7 @@ async function openThread(channel, root, around = null) {
 }
 function threadMessage(message) {
     const article = document.createElement("article");
-    article.className = "message" + (message.userId === S.me.id ? " mine" : "") + (mentionsMe(message.text, message.ai) ? " mentioned" : "") + (message.withdrawnAt ? " withdrawn" : "");
+    article.className = "message" + (message.ai ? " from-ai" : "") + (message.userId === S.me.id ? " mine" : "") + (mentionsMe(message.text, message.ai) ? " mentioned" : "") + (message.withdrawnAt ? " withdrawn" : "");
     article.dataset.seq = String(message.seq); article.tabIndex = -1;
     const head = document.createElement("div"), text = document.createElement("div");
     head.className = "head"; text.className = "text";

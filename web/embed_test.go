@@ -275,7 +275,7 @@ func TestDigitalAgencyDesignSystemIsEmbedded(t *testing.T) {
 		t.Fatal("main send button is not disabled for empty input")
 	}
 	threadScript := request(t, handler, "/js/threads.js").Body.String()
-	if strings.Count(threadScript, "!text.trim() || attachWithoutAI || multiAI;") != 2 {
+	if strings.Count(threadScript, "T.current.loading || !text.trim() ||")+strings.Count(threadScript, "T.current?.loading || !text.trim() ||") != 2 {
 		t.Fatal("thread send button is not disabled for empty input")
 	}
 
@@ -318,7 +318,8 @@ func TestApplicationPreservesContentEditableBlockBoundaries(t *testing.T) {
 	for _, expected := range []string{
 		`function serializeEditorChildren(parent)`,
 		`["DIV", "P", "BLOCKQUOTE"].includes(node.tagName)`,
-		`if (block && value && !value.endsWith("\n")) value += "\n"`,
+		`if ((block || afterBlock) && value && !value.endsWith("\n")) value += "\n"`,
+		`afterBlock = block;`,
 		`return serializeEditorChildren(root).replace(/\n+$/, "")`,
 	} {
 		if !strings.Contains(script, expected) {
@@ -1094,6 +1095,45 @@ func TestWebhookAdminUIEmbedded(t *testing.T) {
 	} {
 		if !strings.Contains(adminScript, expected) {
 			t.Fatalf("admin.js does not contain %q", expected)
+		}
+	}
+}
+
+func TestComposerLimitsAndChannelReloadKeepUserSelection(t *testing.T) {
+	handler := Handler(testAuthenticator(false))
+	threadScript := request(t, handler, "/js/threads.js").Body.String()
+	if strings.Count(threadScript, "!text.trim() || over || attachWithoutAI || multiAI;") != 2 {
+		t.Fatal("thread send button is not disabled above the message size limit")
+	}
+	// channels_changed reloads the list; it must not re-select the old channel over a newer selection.
+	script := request(t, handler, "/js/app.js").Body.String()
+	if !strings.Contains(script, "const selectedID = S.channel?.id, selectionToken = S.selectionToken;") ||
+		!strings.Contains(script, "if (selectionToken !== S.selectionToken) {\n\t\t\t\tsyncThreads();\n\t\t\t\treturn;") {
+		t.Fatal("channels_changed can undo a channel selection made while the list reloads")
+	}
+}
+
+func TestChannelUnreadAndMentionBadgesAreDistinct(t *testing.T) {
+	handler := Handler(testAuthenticator(false))
+	script := request(t, handler, "/js/app.js").Body.String()
+	for _, expected := range []string{
+		"function updateChannelMentionMarks()",
+		"mention.message.seq > (S.read.get(mention.channelId)?.lastReadSeq || 0)",
+		`button.classList.toggle("has-mention", has);`,
+		`(m.ai ? " from-ai" : "")`,
+	} {
+		if !strings.Contains(script, expected) {
+			t.Fatalf("app.js does not contain %q", expected)
+		}
+	}
+	stylesheet := request(t, handler, "/css/chat.css").Body.String()
+	for _, expected := range []string{
+		".app .channel.has-mention > .tc-badge",
+		`.app .channel-section-unread.has-mention::before { content: "@";`,
+		".app .message.from-ai:not(.mentioned, .notification-target)",
+	} {
+		if !strings.Contains(stylesheet, expected) {
+			t.Fatalf("chat.css does not contain %q", expected)
 		}
 	}
 }

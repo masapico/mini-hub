@@ -135,25 +135,31 @@ try{
  await api(bob,`/api/channels/general/threads/${normal.seq}/messages`,'POST',{text:'別件の返信'});
  await wait(`T.summaries.get('general:${root.seq}')?.latestSeq===${fresh.seq}`);
  assert.equal(requests.filter(p=>/\/threads\/\d+\/messages/.test(p)).length,before,'closed realtime fetched bodies');
+ // Thread lists only show threads the user takes part in: admin joined this one in another channel,
+ // while the reply on `normal` (only a reaction from admin) stays out of both scopes.
+ await api(bob,'/api/channels/other/join','POST');
+ const otherRoot=await api(bob,'/api/channels/other/messages','POST',{text:'別チャンネルの相談です。'});
+ await api(admin,`/api/channels/other/threads/${otherRoot.seq}/messages`,'POST',{text:'確認します。'});
+ await api(bob,`/api/channels/other/threads/${otherRoot.seq}/messages`,'POST',{text:'よろしくお願いします。'});
  await run("$('notifications').click();$('threadTab').click()");
- await wait("T.listChannel === '' && document.querySelectorAll('#threadList .thread-list-row').length===1");
+ await wait("T.listChannel === '' && document.querySelectorAll('#threadList .thread-list-row').length===2");
  assert.equal(await run("$('threadScopeAll').getAttribute('aria-pressed') === 'true' && $('threadScopeChannel').textContent.includes('全社連絡')"),true);
  await run("$('threadScopeChannel').click()");
- await wait("T.listChannel === 'general' && document.querySelectorAll('#threadList .thread-list-row').length===2");
+ await wait("T.listChannel === 'general' && document.querySelectorAll('#threadList .thread-list-row').length===1");
  assert.equal(await run("$('threadScopeChannel').getAttribute('aria-pressed') === 'true' && $('threadScope').scrollWidth <= $('threadScope').clientWidth && document.documentElement.scrollWidth <= innerWidth"),true);
  await run("globalThis.threadListAPI=api;api=async(url,options)=>{if(url.startsWith('/api/channels/general/threads?')){if(url.includes('cursor=next'))return {threads:[],nextCursor:''};const page=await threadListAPI(url,options);return {...page,nextCursor:'next'};}return threadListAPI(url,options)};$('threadScopeChannel').click()");
  await wait("T.listChannel === 'general' && !$('moreThreads').classList.contains('hidden')");
  await run("$('moreThreads').click()");
- await wait("T.listChannel === 'general' && T.listCursor === '' && document.querySelectorAll('#threadList .thread-list-row').length === 2");
+ await wait("T.listChannel === 'general' && T.listCursor === '' && document.querySelectorAll('#threadList .thread-list-row').length === 1");
  await run("api=async(url,options)=>{if(url.startsWith('/api/channels/general/threads?'))throw Error('一覧失敗テスト');return threadListAPI(url,options)};$('threadScopeChannel').click()");
  await wait("$('threadList').textContent.includes('一覧失敗テスト') && !!$('threadList').querySelector('button')");
  await run("api=threadListAPI;document.querySelector('#threadList button').click()");
- await wait("T.listChannel === 'general' && document.querySelectorAll('#threadList .thread-list-row').length === 2");
+ await wait("T.listChannel === 'general' && document.querySelectorAll('#threadList .thread-list-row').length === 1");
  await run("syncThreads(false)");
- await wait("!T.syncing && T.listChannel === 'general' && document.querySelectorAll('#threadList .thread-list-row').length === 2");
+ await wait("!T.syncing && T.listChannel === 'general' && document.querySelectorAll('#threadList .thread-list-row').length === 1");
  await run("$('threadScopeAll').click()");
- await wait("T.listChannel === '' && document.querySelectorAll('#threadList .thread-list-row').length===1");
- await run("document.querySelector('#threadList .thread-list-row').click()");await wait('T.current && !T.current.loading');
+ await wait("T.listChannel === '' && document.querySelectorAll('#threadList .thread-list-row').length===2");
+ await run("[...document.querySelectorAll('#threadList .thread-list-row')].find(row=>row.textContent.includes('全社連絡')).click()");await wait("T.current?.channel === 'general' && !T.current.loading");
  // Reconnect must recover a missed update, while a closed thread still stays lazy.
  await run('closeThread(); S.ws.onclose=null; S.ws.close()');await pause(100);
  const missed=await api(bob,`/api/channels/general/threads/${root.seq}/messages`,'POST',{text:'切断中の返信'});
@@ -161,8 +167,10 @@ try{
  await run(`openThread('general',${root.seq},${missed.seq})`);assert.equal(await run(`T.current.messages.some(m=>m.seq===${missed.seq})`),true);
 
  // The compact reply composer preserves rich text through drafts and posting.
- const rich='**太字** __下線__ ~~取消~~\n> 引用\n[リンク](https://example.com/path)';
- await run(`$('threadInput').value=${JSON.stringify(rich)};$('threadInput').dispatchEvent(new Event('input',{bubbles:true}))`);
+ // Underline is shown while editing but not stored: Markdown has no underline (`__x__` means bold).
+ const typed='**太字** __下線__ ~~取消~~\n> 引用\n[リンク](https://example.com/path)';
+ const rich='**太字** 下線 ~~取消~~\n> 引用\n[リンク](https://example.com/path)';
+ await run(`$('threadInput').value=${JSON.stringify(typed)};$('threadInput').dispatchEvent(new Event('input',{bubbles:true}))`);
  assert.equal(await run("!!$('threadInput').querySelector('strong, b') && !!$('threadInput').querySelector('u') && !!$('threadInput').querySelector('s') && !!$('threadInput').querySelector('blockquote') && !!$('threadInput').querySelector('a')"),true);
  assert.equal(await run("$('threadInput').value"),rich);
  await run('closeThread()');await run(`openThread('general',${root.seq})`);

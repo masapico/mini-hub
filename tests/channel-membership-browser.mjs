@@ -109,7 +109,8 @@ try {
     await run("$('join').click()");
     await wait("S.channel?.members?.includes('bob') && !S.channelActionBusy");
     assert.equal((await api(bob, '/api/channels/general/read')).unreadCount, 0);
-    assert.equal(await run("$('join').textContent === 'チャンネルを退出' && $('join').getAttribute('aria-label') === 'チャンネルを退出' && $('join').title === 'チャンネルを退出' && getComputedStyle($('join')).display !== 'none'"), true);
+    // After joining, leaving moves into the channel menu (…) and the join button is hidden.
+    assert.equal(await run("getComputedStyle($('join')).display === 'none' && !$('channelMenu').classList.contains('hidden') && $('leaveChannel').textContent.trim() === 'チャンネルを退出' && !$('leaveChannel').disabled"), true);
     await api(admin, '/api/channels/general/messages', 'POST', {text: '参加後の投稿'});
     await wait("S.unread.get('general') === 1");
     assert.equal(await run("document.querySelector('.channel .tc-badge')?.textContent === '1'"), true);
