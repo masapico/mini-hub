@@ -382,7 +382,9 @@
         return wrap;
     }
 
-    function renderAllMessages() {
+    // reveal: show that message from its top instead of jumping to the end,
+    // since replies arrive all at once rather than streamed.
+    function renderAllMessages(reveal) {
         const container = $("aiCanvasMessages");
         if (!container) return;
         container.innerHTML = "";
@@ -395,10 +397,17 @@
             return;
         }
 
+        let revealEl = null;
         State.messages.forEach((m) => {
-            container.append(renderMessage(m));
+            const el = renderMessage(m);
+            if (m === reveal) revealEl = el;
+            container.append(el);
         });
-        container.scrollTop = container.scrollHeight;
+        if (revealEl) {
+            container.scrollTop += revealEl.getBoundingClientRect().top - container.getBoundingClientRect().top - container.clientTop - 8;
+        } else {
+            container.scrollTop = container.scrollHeight;
+        }
     }
 
     function insertIntoComposer(text) {
@@ -605,7 +614,7 @@
                 State.messages.push(replyMsg);
             }
             saveMessages(State.messages);
-            renderAllMessages();
+            renderAllMessages(replyMsg);
 
             if (res.dailyQuota !== undefined) {
                 State.quota = {
@@ -634,7 +643,7 @@
             } else {
                 State.messages.push(errorMsg);
             }
-            renderAllMessages();
+            renderAllMessages(errorMsg);
         } finally {
             input.contentEditable = "true";
             sendBtn.disabled = false;

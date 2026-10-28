@@ -565,7 +565,7 @@
 }
 .message .markdown-body p,
 .ai-canvas-msg .markdown-body p {
-    margin: 0 0 0.25rem;
+    margin: 0 0 0.6rem;
 }
 .message .markdown-body p:empty,
 .ai-canvas-msg .markdown-body p:empty {

@@ -696,6 +696,25 @@ function processMarkdownDOM(container) {
     replaceMentionsInTextNodes(container);
 }
 
+// The editor serializes a quote as "> line" followed by the next line after a single
+// newline; Markdown would treat that line as a lazy continuation of the quote.
+function separateQuoteContinuation(text) {
+    const lines = text.split("\n"), out = [];
+    let fence = null;
+    lines.forEach((line, index) => {
+        out.push(line);
+        const marker = line.match(/^\s*(`{3,}|~{3,})/)?.[1];
+        if (marker && (!fence || marker[0] === fence[0] && marker.length >= fence.length)) {
+            fence = fence ? null : marker;
+            return;
+        }
+        if (fence || !/^\s*>/.test(line)) return;
+        const next = lines[index + 1];
+        if (next !== undefined && next.trim() !== "" && !/^\s*>/.test(next)) out.push("");
+    });
+    return out.join("\n");
+}
+
 function renderMessageMarkdown(text) {
     if (!text) {
         return document.createElement("span");
@@ -704,7 +723,7 @@ function renderMessageMarkdown(text) {
         return fragment(text, false);
     }
     try {
-        const rawHTML = marked.parse(text, { gfm: true, breaks: true });
+        const rawHTML = marked.parse(separateQuoteContinuation(text), { gfm: true, breaks: true });
         const cleanHTML = sanitizeMessageHTML(rawHTML);
         const container = document.createElement("div");
         container.className = "markdown-body";
