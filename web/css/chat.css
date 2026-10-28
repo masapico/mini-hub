@@ -291,14 +291,47 @@
 .app .mention-option:focus { background: #f1f5f9; }
 /* Equal geometry for every message state, including keyboard focus. */
 .app .message {
+    position: relative;
     margin: 2px -10px;
-    padding: 9px 10px 9px 8px;
+    padding: 6px 10px 6px 8px;
     border-left: 2px solid transparent;
     border-radius: 0;
     background: #fff;
     box-shadow: none;
 }
 .app .message:hover { background: var(--ui-hover); }
+
+/* Message controls are compact chat controls, not 40px DADS form buttons.
+   24px keeps the WCAG 2.2 minimum target size. */
+.app .message-actions .btn {
+    min-height: 24px;
+    padding-block: 0;
+}
+.app .message-actions .reply-button,
+.app .reaction-chip,
+.app .reaction-add-button { height: 24px; }
+
+/* With nothing to show (no reactions, replies or restore), the action bar floats over the
+   message's top-right corner on hover instead of reserving an empty row under every message. */
+@media (hover: hover) {
+    .app .message-actions:not(:has(.reaction-chip, .reply-button.has-replies)) {
+        position: absolute;
+        top: -14px;
+        right: 12px;
+        z-index: 2;
+        min-height: 0;
+        margin: 0;
+        padding: 2px 4px;
+        border: 1px solid var(--ui-line);
+        border-radius: var(--ui-radius-control);
+        background: #fff;
+        box-shadow: var(--dads-shadow-md);
+    }
+    .app .message:not(:hover):not(:focus-within):not(:focus) .message-actions:not(:has(.reaction-chip, .reply-button.has-replies)) {
+        opacity: 0;
+        pointer-events: none;
+    }
+}
 .thread-messages .message.withdrawn { background:#f8fafc; border-left-color:#cbd5e1; }
 .app .message.withdrawn .head,
 .thread-messages .message.withdrawn .head { color:#64748b; }

@@ -408,8 +408,8 @@ body {
     color: #94a3b8;
     margin-left: 8px;
 }
+/* Inline after the time: the floating message toolbar occupies the top-right corner. */
 .seq {
-    float: right;
     opacity: 0;
 }
 .message:hover .seq {

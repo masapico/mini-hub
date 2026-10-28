@@ -298,12 +298,14 @@ function threadMessage(message) {
         if (atts) text.append(atts);
     }
     article.append(head,text);
-    if (message.threadRootSeq && !message.withdrawnAt) article.append(reactionBar(message.seq, message.userId !== S.me.id));
+    const actions = message.threadRootSeq && !message.withdrawnAt ? reactionBar(message.seq, message.userId !== S.me.id) : null;
+    if (actions) article.append(actions);
     if ((message.withdrawnKind==="message" || !message.withdrawnAt) && (message.userId === S.me.id || S.me.role === "admin" || (S.channel?.managers || []).includes(S.me.id) && member(S.channel))) {
         const restoring=!!message.withdrawnAt;
         const button=document.createElement("button");button.type="button";button.className=restoring?"btn btn-sm message-withdraw-action message-restore-action":"btn btn-sm message-withdraw-action";button.textContent=restoring?"取り消しを戻す":"取り消す";
         button.onclick=async()=>{if(!confirm(restoring?"取り消しを戻し、元のメッセージを再表示しますか？":"この投稿を取り消しますか？ 元の内容は保存されます。"))return;button.disabled=true;try{const updated=await api(`/api/channels/${encodeURIComponent(S.channel.id)}/messages/${message.seq}/${restoring?"restore":"withdraw"}`,{method:"POST"});if(T.current){if(T.current.parent?.seq===message.seq)T.current.parent=updated;T.current.messages=T.current.messages.map(m=>m.seq===message.seq?updated:m);renderThread(T.current)}}catch(e){button.disabled=false;note(e.message,true)}};
-        article.append(button);
+        // Inside the action bar so it shares the hover toolbar instead of adding a row.
+        (actions || article).append(button);
     }
     return article;
 }
@@ -318,6 +320,8 @@ function refreshThreadReaction(messageSeq) {
     const updated = reactionBar(messageSeq, message.userId !== S.me.id);
     const focused = current?.contains(document.activeElement);
     const focusedKey = focused ? document.activeElement.dataset.reaction : null;
+    const manage = current?.querySelector(".message-withdraw-action");
+    if (manage) updated.append(manage);
     if (current) current.replaceWith(updated);
     else article.querySelector(".text")?.after(updated);
     if (focused) {
