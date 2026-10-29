@@ -302,7 +302,7 @@ function threadMessage(message) {
         if (atts) text.append(atts);
     }
     article.append(head,text);
-    const actions = message.threadRootSeq && !message.withdrawnAt ? reactionBar(message.seq, message.userId !== S.me.id) : null;
+    const actions = message.threadRootSeq && !message.withdrawnAt ? reactionBar(message.seq) : null;
     if (actions) article.append(actions);
     if ((message.withdrawnKind==="message" || !message.withdrawnAt) && (message.userId === S.me.id || S.me.role === "admin" || (S.channel?.managers || []).includes(S.me.id) && member(S.channel))) {
         const restoring=!!message.withdrawnAt;
@@ -321,7 +321,7 @@ function refreshThreadReaction(messageSeq) {
         .find(el => Number(el.dataset.seq) === messageSeq);
     if (!article || message.withdrawnAt) return;
     const current = article.querySelector(".reactions");
-    const updated = reactionBar(messageSeq, message.userId !== S.me.id);
+    const updated = reactionBar(messageSeq);
     const focused = current?.contains(document.activeElement);
     const focusedKey = focused ? document.activeElement.dataset.reaction : null;
     const manage = current?.querySelector(".message-withdraw-action");

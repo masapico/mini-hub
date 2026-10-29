@@ -54,6 +54,7 @@ try{
  assert.equal(await run("document.querySelector('#messages [data-thread-root]').textContent.includes('返信60件')"),true);
  assert.equal(await run(`(()=>{const rootReply=document.querySelector('#messages [data-thread-root="${root.seq}"]'),normalReply=document.querySelector('#messages [data-thread-root="${normal.seq}"]'),actions=normalReply.closest('.reactions');return rootReply.parentElement.classList.contains('reactions')&&actions.getAttribute('aria-label')==='メッセージの操作'&&[...actions.children].slice(0,3).map(el=>el.className).join('|')==='reaction-chip-wrap|reaction-add|btn btn-outline-secondary reply-button'})()`),true);
  assert.equal(await run(`document.querySelector('#messages [data-thread-root="${normal.seq}"]').closest('.reactions').querySelector('.reaction-chip').textContent.trim()`),'1');
+ assert.equal(await run(`!!document.querySelector('#messages [data-thread-root="${root.seq}"]').closest('.reactions').querySelector('.reaction-add-button')`),true,'own post has no add-reaction button');
  await run("document.querySelector('#messages [data-thread-root]').click()");await wait('T.current?.messages.length===50 && !T.current.loading');
  await run(`handleTypingEvent({type:'typing_start',channelId:'general',threadRootSeq:${root.seq},userId:'bob',typingSession:'bob-thread'})`);
  assert.equal(await run("$('threadTypingStatus').textContent"),'鈴木さんが入力中です…');

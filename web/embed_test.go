@@ -927,7 +927,7 @@ func TestReactionPickerInteractionRules(t *testing.T) {
 	script := request(t, Handler(testAuthenticator(false)), "/js/app.js").Body.String()
 	for _, expected := range []string{
 		`["eyes", "hourglass-split", "確認中"]`,
-		`reactionBar(m.seq, m.userId !== S.me.id)`,
+		`reactionBar(m.seq)`,
 		`document.addEventListener("click", () => closeReactionPickers())`,
 		`closeReactionPickers(picker);`,
 		`setReactionPickerOpen(picker, false);`,
@@ -935,6 +935,9 @@ func TestReactionPickerInteractionRules(t *testing.T) {
 		if !strings.Contains(script, expected) {
 			t.Fatalf("application script does not enforce reaction picker rule %q", expected)
 		}
+	}
+	if strings.Contains(script, "allowAdd") {
+		t.Fatal("自分の投稿にリアクション追加ボタンを出さない制限が残っています")
 	}
 	if strings.Contains(script, `["eyes", "eye", "確認中"]`) {
 		t.Fatal("確認中リアクションが従来の目のアイコンのままです")

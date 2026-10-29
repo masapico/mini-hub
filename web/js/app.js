@@ -1745,7 +1745,7 @@ async function showReactionUsers(messageSeq, key, label, tooltip) {
     }
 }
 
-function reactionBar(messageSeq, allowAdd) {
+function reactionBar(messageSeq) {
     const bar = document.createElement("div");
     bar.className = "reactions message-actions";
     bar.setAttribute("role", "group");
@@ -1779,7 +1779,7 @@ function reactionBar(messageSeq, allowAdd) {
         wrap.append(button, tooltip);
         bar.append(wrap);
     }
-    if (member(S.channel) && allowAdd) {
+    if (member(S.channel)) {
         const wrap = document.createElement("span");
         wrap.className = "reaction-add";
         const add = document.createElement("button");
@@ -3122,7 +3122,7 @@ render = function () {
 			article.querySelector(".text").append(pollHost);
 			window.pollRenderCard(pollHost,m.pollRef.id);
 		}
-		const actions = m.withdrawnAt ? document.createElement("div") : reactionBar(m.seq, m.userId !== S.me.id);
+		const actions = m.withdrawnAt ? document.createElement("div") : reactionBar(m.seq);
 		if (m.withdrawnAt) actions.className = "message-actions";
 		if (!m.withdrawnAt) {
 			if (typeof replyButton === "function") actions.append(replyButton(m));
