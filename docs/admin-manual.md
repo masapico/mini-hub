@@ -146,10 +146,13 @@ location ^~ /hub/ {
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection $minihub_connection_upgrade;
     proxy_read_timeout 75s;
+    client_max_body_size 70m;
 }
 ```
 
 `proxy_pass` の宛先には末尾の `/` を付けず、`/hub/` を保ったまま転送します。例えば `/hub/api/me` はminihubにも `/hub/api/me` として届く必要があります。ベースパスは設定値を使用し、`X-Forwarded-Prefix` からは推測しません。`Host` は外部のホスト名・ポートを保持し、`Upgrade` と `Connection` はWebSocket接続のために転送します。nginxの仕様は [proxy_pass](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_pass) と [WebSocket転送](https://nginx.org/en/docs/http/websocket.html) を参照してください。
+
+AIへの添付ファイルは、テキストを抽出せずファイル本体のまま送信します（1ファイル20 MB・合計50 MBまで）。チャンネルとスレッドでは添付時に1ファイルずつアップロードし、AIキャンバスでは送信時にBase64で埋め込んだJSONとして送るため、元のサイズの約1.34倍（合計50 MBなら約67 MB）になります。nginxの `client_max_body_size` は既定値が1 MBで、これを超えるリクエストはminihubに届く前に `413 Request Entity Too Large` になります。文字数が少ない資料でも、画像を含むPDFやOffice文書は数MBになることがあるため、添付を使う場合は `70m` 以上を指定します。nginx以外のリバースプロキシやWAFを経由する場合も、同様にリクエスト本文のサイズ上限を確認してください。nginxの仕様は [client_max_body_size](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size) を参照してください。
 
 利用者は `https://myhost.com/hub/` または `/hub/login` へアクセスします。予定調整一覧は `/hub/schedules`、詳細は `/hub/schedules/<ID>`、APIは `/hub/api/...`、WebSocketは `/hub/api/realtime` です。ローカルの待受先へ直接接続する場合も `http://127.0.0.1:8080/hub/` のようにベースパスを付けます。ベースパス外のURLは404になります。
 
