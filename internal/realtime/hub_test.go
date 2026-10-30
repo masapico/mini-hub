@@ -361,9 +361,8 @@ func TestCommittedHTTPMessageProducesRealtimeEvent(t *testing.T) {
 }
 
 func TestOnlineCountWatchAndConnectionStats(t *testing.T) {
-	currentUserID := "alice"
 	hub := realtime.New(
-		func(*http.Request) (string, error) { return currentUserID, nil },
+		func(r *http.Request) (string, error) { return r.Header.Get("X-User-ID"), nil },
 		func(context.Context, string, string) bool { return true },
 		func(context.Context, string, string) bool { return true },
 		nil,
@@ -374,24 +373,35 @@ func TestOnlineCountWatchAndConnectionStats(t *testing.T) {
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/"
-	currentUserID = "user-1"
-	conn1, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatal(err)
+	dial := func(id string) *websocket.Conn {
+		t.Helper()
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL, http.Header{"X-User-ID": []string{id}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return conn
 	}
+	// The hub registers a connection after the handshake response, so Dial can
+	// return before ConnectionStats reflects it.
+	waitStats := func(wantUsers, wantConns int) {
+		t.Helper()
+		deadline := time.Now().Add(2 * time.Second)
+		for {
+			users, conns := hub.ConnectionStats()
+			if users == wantUsers && conns == wantConns {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("expected %d users, %d conns; got %d users, %d conns", wantUsers, wantConns, users, conns)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	conn1 := dial("user-1")
 	defer conn1.Close()
-
-	currentUserID = "user-2"
-	conn2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	conn2 := dial("user-2")
 	defer conn2.Close()
-
-	onlineUsers, totalConns := hub.ConnectionStats()
-	if onlineUsers != 2 || totalConns != 2 {
-		t.Fatalf("expected 2 users, 2 conns; got %d users, %d conns", onlineUsers, totalConns)
-	}
+	waitStats(2, 2)
 
 	// conn1 registers for online count watch
 	if err := conn1.WriteJSON(realtime.Event{Type: "online_count_watch"}); err != nil {
@@ -409,18 +419,21 @@ func TestOnlineCountWatchAndConnectionStats(t *testing.T) {
 	// conn2 disconnects
 	_ = conn2.Close()
 
-	// conn1 should receive updated onlineCount=1 after debounce flush
+	// conn1 should receive updated onlineCount=1 after debounce flush. The flush
+	// scheduled by the connections may still deliver onlineCount=2 first.
 	_ = conn1.SetReadDeadline(time.Now().Add(3 * time.Second))
-	if err := conn1.ReadJSON(&event); err != nil {
-		t.Fatal(err)
-	}
-	if event.Type != "online_count" || event.OnlineCount != 1 {
-		t.Fatalf("expected onlineCount=1, got %#v", event)
+	for {
+		if err := conn1.ReadJSON(&event); err != nil {
+			t.Fatal(err)
+		}
+		if event.Type != "online_count" || (event.OnlineCount != 1 && event.OnlineCount != 2) {
+			t.Fatalf("expected onlineCount=1, got %#v", event)
+		}
+		if event.OnlineCount == 1 {
+			break
+		}
 	}
 
-	onlineUsers, totalConns = hub.ConnectionStats()
-	if onlineUsers != 1 || totalConns != 1 {
-		t.Fatalf("expected 1 user, 1 conn; got %d users, %d conns", onlineUsers, totalConns)
-	}
+	waitStats(1, 1)
 }
 
