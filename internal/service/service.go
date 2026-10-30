@@ -31,7 +31,10 @@ var (
 	ErrAIUpstream      = errors.New("ai upstream error")
 	ErrAITimeout       = errors.New("ai request timed out")
 	ErrAIReplyTooLarge = errors.New("ai reply too large")
-	ErrRateLimited     = errors.New("rate limit exceeded")
+	// ErrAIReplyIncomplete means the reply has no text because generation hit
+	// the token limit or ended after reasoning only.
+	ErrAIReplyIncomplete = errors.New("ai reply incomplete")
+	ErrRateLimited       = errors.New("rate limit exceeded")
 )
 
 const MaxMessageBytes = 16 * 1024

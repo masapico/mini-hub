@@ -527,19 +527,25 @@ func (s *Service) runAI(d *aiDispatcher, j aiJob) {
 		return
 	}
 	b, err := io.ReadAll(io.LimitReader(resp.Body, aiMaxContextBytes+1))
-	var reply struct {
-		Choices []struct {
-			Message struct {
-				Content *string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if err != nil || len(b) > aiMaxContextBytes || json.Unmarshal(b, &reply) != nil || len(reply.Choices) == 0 || reply.Choices[0].Message.Content == nil {
+	if err != nil || len(b) > aiMaxContextBytes {
 		s.aiFailure(d, j, "AIの回答形式または回答サイズが不正です（本文は16 KiB以内）。", "response_invalid")
 		return
 	}
-	answer := *reply.Choices[0].Message.Content
-	if len(answer) > MaxMessageBytes || strings.TrimSpace(answer) == "" {
+	answer, diag, ok := parseAIReply(b)
+	if !ok {
+		s.aiFailure(d, j, "AIの回答形式または回答サイズが不正です（本文は16 KiB以内）。", "response_invalid")
+		return
+	}
+	if strings.TrimSpace(answer) == "" {
+		attrs := append([]any{"requestBytes", len(body)}, diag.logAttrs()...)
+		if diag.incomplete() {
+			s.aiFailure(d, j, aiReplyIncompleteNotice, "reply_incomplete", attrs...)
+		} else {
+			s.aiFailure(d, j, "AIの回答が空でした。時間をおいて再度お試しください。", "reply_empty", attrs...)
+		}
+		return
+	}
+	if len(answer) > MaxMessageBytes {
 		s.aiFailure(d, j, "AIの回答形式または回答サイズが不正です（本文は16 KiB以内）。", "response_invalid")
 		return
 	}
@@ -548,8 +554,74 @@ func (s *Service) runAI(d *aiDispatcher, j aiJob) {
 	}
 }
 
-func (s *Service) aiFailure(d *aiDispatcher, j aiJob, text, code string) {
-	d.logger.Warn("AI request failed", "requestId", j.id, "aiId", j.account.ID, "channelId", j.channel, "code", code)
+// aiReplyIncompleteNotice is shown when the AI returned no text because it hit
+// the token limit or stopped after reasoning.
+const aiReplyIncompleteNotice = "AIの回答が最大トークン数に達したか、思考過程だけで終了したため、本文がありません。短い内容で再度お試しいただくか、管理者にAI設定の最大トークン数の見直しを依頼してください。"
+
+// aiReplyDiag describes an upstream reply for logs without its text.
+type aiReplyDiag struct {
+	finishReason     string
+	reasoningBytes   int
+	promptTokens     int
+	completionTokens int
+}
+
+func (d aiReplyDiag) logAttrs() []any {
+	return []any{"finishReason", d.finishReason, "reasoningBytes", d.reasoningBytes, "promptTokens", d.promptTokens, "completionTokens", d.completionTokens}
+}
+
+// incomplete reports whether an empty reply was cut off by the token limit or
+// spent on reasoning, rather than being an empty answer.
+func (d aiReplyDiag) incomplete() bool {
+	return d.finishReason == "length" || d.reasoningBytes > 0
+}
+
+// parseAIReply reads the first choice of an OpenAI-compatible chat completion.
+// ok is false when the body has no choice with a content field.
+func parseAIReply(b []byte) (answer string, diag aiReplyDiag, ok bool) {
+	var reply struct {
+		Choices []struct {
+			Message struct {
+				Content *string `json:"content"`
+				// Reasoning servers (vLLM, llama.cpp, Ollama, etc.) return the
+				// thinking separately; only its size is used.
+				ReasoningContent json.RawMessage `json:"reasoning_content"`
+				Reasoning        json.RawMessage `json:"reasoning"`
+			} `json:"message"`
+			FinishReason string `json:"finish_reason"`
+		} `json:"choices"`
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+		} `json:"usage"`
+	}
+	if json.Unmarshal(b, &reply) != nil || len(reply.Choices) == 0 || reply.Choices[0].Message.Content == nil {
+		return "", diag, false
+	}
+	c := reply.Choices[0]
+	diag = aiReplyDiag{
+		finishReason:     c.FinishReason,
+		reasoningBytes:   rawTextBytes(c.Message.ReasoningContent) + rawTextBytes(c.Message.Reasoning),
+		promptTokens:     reply.Usage.PromptTokens,
+		completionTokens: reply.Usage.CompletionTokens,
+	}
+	return *c.Message.Content, diag, true
+}
+
+// rawTextBytes returns the length of a JSON string, or of any other non-null value.
+func rawTextBytes(r json.RawMessage) int {
+	var s string
+	if json.Unmarshal(r, &s) == nil {
+		return len(s)
+	}
+	if len(r) == 0 || string(r) == "null" {
+		return 0
+	}
+	return len(r)
+}
+
+func (s *Service) aiFailure(d *aiDispatcher, j aiJob, text, code string, attrs ...any) {
+	d.logger.Warn("AI request failed", append([]any{"requestId", j.id, "aiId", j.account.ID, "channelId", j.channel, "code", code}, attrs...)...)
 	if d.ctx.Err() == nil {
 		if err := s.saveAIReply(d.ctx, j, text, "error"); err != nil {
 			d.logger.Warn("AI failure notice not saved", "requestId", j.id, "channelId", j.channel)
@@ -980,21 +1052,16 @@ func (s *Service) DirectAICall(ctx context.Context, userID string, req domain.AI
 		return nil, fmt.Errorf("%w: response body exceeds %d bytes", ErrAIReplyTooLarge, aiMaxContextBytes)
 	}
 
-	var reply struct {
-		Choices []struct {
-			Message struct {
-				Content *string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if err := json.Unmarshal(b, &reply); err != nil || len(reply.Choices) == 0 || reply.Choices[0].Message.Content == nil {
+	answer, diag, ok := parseAIReply(b)
+	if !ok {
 		d.logger.Warn("AI direct response format invalid", "aiId", target.ID, "userId", userID)
 		return nil, fmt.Errorf("%w: invalid response format", ErrAIUpstream)
 	}
-
-	answer := *reply.Choices[0].Message.Content
 	if strings.TrimSpace(answer) == "" {
-		d.logger.Warn("AI direct reply empty", "aiId", target.ID, "userId", userID)
+		d.logger.Warn("AI direct reply empty", append([]any{"aiId", target.ID, "userId", userID, "requestBytes", len(body)}, diag.logAttrs()...)...)
+		if diag.incomplete() {
+			return nil, fmt.Errorf("%w: empty reply, finish reason %q", ErrAIReplyIncomplete, diag.finishReason)
+		}
 		return nil, fmt.Errorf("%w: empty reply", ErrAIUpstream)
 	}
 	if len(answer) > aiMaxDirectReplyBytes {

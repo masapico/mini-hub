@@ -1196,6 +1196,8 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 		status, message = http.StatusGatewayTimeout, "AIの応答が時間内に返りませんでした。時間をおいて再度お試しください"
 	case errors.Is(err, service.ErrAIReplyTooLarge):
 		status, message = http.StatusBadGateway, "AIの回答が長すぎるため表示できません。回答を短くするよう指示して再度お試しください"
+	case errors.Is(err, service.ErrAIReplyIncomplete):
+		status, message = http.StatusBadGateway, "AIの回答が最大トークン数に達したか、思考過程だけで終了したため、本文がありません。新しい会話で短い内容から再度お試しいただくか、管理者にAI設定の最大トークン数の見直しを依頼してください"
 	case errors.Is(err, service.ErrAIUpstream):
 		status, message = http.StatusBadGateway, "AIから正常な応答を受信できませんでした。時間をおいて再度お試しください"
 	case errors.Is(err, service.ErrInvalid):

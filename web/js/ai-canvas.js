@@ -524,6 +524,25 @@
         }
     }
 
+    // Builds the conversation sent to /api/ai/direct: up to the last 10 messages,
+    // matching the server-side sliding window. Errors, the thinking placeholder and
+    // failed turns are dropped, and earlier attachments become file name tags, so the
+    // AI never receives consecutive or empty user messages.
+    function directPayloadMessages(messages) {
+        const validMessages = messages.filter((m, i, all) =>
+            !m.error && !m.thinking && !(m.role === "user" && all[i + 1]?.error));
+        const recentMessages = validMessages.slice(-10);
+        const lastIdx = recentMessages.length - 1;
+        return recentMessages.map((m, i) => {
+            let content = m.content || "";
+            // The last message carries the attachments themselves.
+            if (i !== lastIdx && m.attachments?.length) {
+                content = [content, ...m.attachments.map(a => `[添付ファイル: ${a.name}]`)].filter(Boolean).join("\n");
+            }
+            return { role: m.role, content };
+        }).filter((m, i) => i === lastIdx || m.content.trim() !== "");
+    }
+
     async function handleSend(e) {
         e?.preventDefault();
         const input = $("aiCanvasInput");
@@ -581,14 +600,7 @@
         }
 
         try {
-            // Prepare messages payload for sliding window (excluding errors and temporary thinking)
-            // Up to the last 10 messages to match server-side sliding window
-            const validMessages = State.messages.filter(m => !m.error && !m.thinking);
-            const recentMessages = validMessages.slice(-10);
-            const payloadMessages = recentMessages.map(m => ({
-                role: m.role,
-                content: m.content,
-            }));
+            const payloadMessages = directPayloadMessages(State.messages);
 
             const res = await window.api("/api/ai/direct", {
                 method: "POST",
@@ -846,6 +858,7 @@
 
     // Expose helpers for app.js integration
     window.updateAICanvasAccounts = updateAccountsDropdown;
+    window.aiCanvasPayloadMessages = directPayloadMessages;
     window.resetAICanvas = () => {
         State.messages = [];
         toggleCanvas(false);

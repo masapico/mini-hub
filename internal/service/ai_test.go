@@ -1,11 +1,13 @@
 package service
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,6 +15,7 @@ import (
 	"time"
 
 	"github.com/masapico/minihub/internal/domain"
+	"github.com/masapico/minihub/internal/storage"
 )
 
 func TestAIPayloadWithAttachmentAndTimestamp(t *testing.T) {
@@ -590,5 +593,135 @@ func TestDirectAICallUpstreamErrors(t *testing.T) {
 		if strings.Contains(err.Error(), server.URL) {
 			t.Fatalf("%s: error leaks upstream URL: %v", c.id, err)
 		}
+	}
+}
+
+func TestParseAIReplyDiagnostics(t *testing.T) {
+	cases := []struct {
+		name, body     string
+		ok, incomplete bool
+		reasoning      int
+	}{
+		{"answer", `{"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}]}`, true, false, 0},
+		{"length", `{"choices":[{"message":{"content":""},"finish_reason":"length"}],"usage":{"prompt_tokens":10,"completion_tokens":20}}`, true, true, 0},
+		{"reasoning_content", `{"choices":[{"message":{"content":"","reasoning_content":"考え中"},"finish_reason":"stop"}]}`, true, true, len("考え中")},
+		{"reasoning", `{"choices":[{"message":{"content":"","reasoning":"think"}}]}`, true, true, 5},
+		{"reasoning object", `{"choices":[{"message":{"content":"","reasoning":{"text":"x"}}}]}`, true, true, len(`{"text":"x"}`)},
+		{"null reasoning", `{"choices":[{"message":{"content":" ","reasoning_content":null},"finish_reason":"stop"}]}`, true, false, 0},
+		{"no content", `{"choices":[{"message":{"reasoning_content":"x"}}]}`, false, false, 0},
+	}
+	for _, c := range cases {
+		_, diag, ok := parseAIReply([]byte(c.body))
+		if ok != c.ok || (ok && (diag.incomplete() != c.incomplete || diag.reasoningBytes != c.reasoning)) {
+			t.Fatalf("%s: ok=%v diag=%+v", c.name, ok, diag)
+		}
+	}
+	_, diag, _ := parseAIReply([]byte(`{"choices":[{"message":{"content":""},"finish_reason":"length"}],"usage":{"prompt_tokens":10,"completion_tokens":20}}`))
+	if diag.finishReason != "length" || diag.promptTokens != 10 || diag.completionTokens != 20 {
+		t.Fatalf("usage not parsed: %+v", diag)
+	}
+}
+
+func TestDirectAICallEmptyReplyDiagnostics(t *testing.T) {
+	s, ctx, user, _ := setupTestService(t)
+	const secret = "秘密の思考内容"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/length":
+			_, _ = io.WriteString(w, `{"choices":[{"message":{"role":"assistant","content":"","reasoning_content":"`+secret+`"},"finish_reason":"length"}],"usage":{"prompt_tokens":900,"completion_tokens":100}}`)
+		case "/reasoning":
+			_, _ = io.WriteString(w, `{"choices":[{"message":{"role":"assistant","content":"\n","reasoning":"`+secret+`"},"finish_reason":"stop"}]}`)
+		case "/blank":
+			_, _ = io.WriteString(w, `{"choices":[{"message":{"role":"assistant","content":"  "},"finish_reason":"stop"}]}`)
+		}
+	}))
+	defer server.Close()
+
+	cases := []struct {
+		id, path, finish string
+		want             error
+	}{
+		{"length-ai", "/length", "length", ErrAIReplyIncomplete},
+		{"reasoning-ai", "/reasoning", "stop", ErrAIReplyIncomplete},
+		{"blank-ai", "/blank", "stop", ErrAIUpstream},
+	}
+	for _, c := range cases {
+		account := domain.AIAccount{ID: c.id, Name: c.id, Enabled: true, URL: server.URL + c.path, Model: "test-model"}
+		if err := s.storage.SaveAIAccount(ctx, &account); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var logs bytes.Buffer
+	if err := s.StartAI(ctx, slog.New(slog.NewTextHandler(&logs, nil))); err != nil {
+		t.Fatal(err)
+	}
+	defer s.CloseAI()
+	s.SetAICanvasOptions(true, 0)
+
+	const prompt = "利用者の質問本文"
+	for _, c := range cases {
+		logs.Reset()
+		_, err := s.DirectAICall(ctx, user, domain.AIDirectRequest{
+			AIAccountID: c.id,
+			Messages:    []domain.AIDirectMessage{{Role: "user", Content: prompt}},
+		})
+		if !errors.Is(err, c.want) {
+			t.Fatalf("%s: expected %v, got %v", c.id, c.want, err)
+		}
+		if c.want == ErrAIUpstream && errors.Is(err, ErrAIReplyIncomplete) {
+			t.Fatalf("%s: blank reply reported as incomplete", c.id)
+		}
+		line := logs.String()
+		for _, key := range []string{"AI direct reply empty", "aiId=" + c.id, "finishReason=" + c.finish, "reasoningBytes=", "promptTokens=", "completionTokens=", "requestBytes="} {
+			if !strings.Contains(line, key) {
+				t.Fatalf("%s: log lacks %q: %s", c.id, key, line)
+			}
+		}
+		if strings.Contains(line, secret) || strings.Contains(line, prompt) {
+			t.Fatalf("%s: log leaks message text: %s", c.id, line)
+		}
+	}
+	used, err := s.storage.GetAIDailyUsage(ctx, user, time.Now().Format("2006-01-02"))
+	if err != nil || used != 0 {
+		t.Fatalf("failed replies counted against quota: used=%d err=%v", used, err)
+	}
+}
+
+func TestChannelAIEmptyReplyNotice(t *testing.T) {
+	s, ctx, user, ch := setupTestService(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"choices":[{"message":{"role":"assistant","content":"","reasoning_content":"thinking"},"finish_reason":"length"}]}`)
+	}))
+	defer server.Close()
+	account := domain.AIAccount{ID: "helper", Name: "AI", URL: server.URL, Model: "test-model", Enabled: true}
+	if err := s.storage.SaveAIAccount(ctx, &account); err != nil {
+		t.Fatal(err)
+	}
+	var logs bytes.Buffer
+	if err := s.StartAI(ctx, slog.New(slog.NewTextHandler(&logs, nil))); err != nil {
+		t.Fatal(err)
+	}
+	defer s.CloseAI()
+	trigger, err := s.PostMessage(ctx, user, ch, "question")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.runAI(s.ai, aiJob{account: s.ai.getAccounts()[0], author: user, channel: ch, id: "request", trigger: trigger})
+
+	after := int64(0)
+	page, err := s.storage.GetMessages(ctx, ch, storage.MessageQuery{ThreadRootSeq: trigger.Seq, AfterSeq: &after, Limit: 100})
+	if err != nil || len(page.Messages) != 1 {
+		t.Fatalf("expected one failure notice: %#v %v", page, err)
+	}
+	m := page.Messages[0]
+	if m.AI == nil || m.AI.Kind != "error" || m.Text != aiReplyIncompleteNotice {
+		t.Fatalf("unexpected notice: %#v", m)
+	}
+	if line := logs.String(); !strings.Contains(line, "code=reply_incomplete") || !strings.Contains(line, "finishReason=length") || strings.Contains(line, "thinking") {
+		t.Fatalf("unexpected log: %s", line)
 	}
 }

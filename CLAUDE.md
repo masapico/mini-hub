@@ -10,6 +10,7 @@ go test ./...                       # 変更後は必ず実行
 go vet ./...                        # 変更後は必ず実行
 go test -race ./...                 # 並行処理に関わる変更で実行（CGOとCコンパイラーが必要）
 node --test tests/urls.test.mjs     # URL生成・ログイン戻り先（追加ライブラリ不要）
+node --test tests/ai-canvas.test.mjs # AIキャンバスの送信会話（追加ライブラリ不要）
 ```
 
 ブラウザ検証（`tests/*.cjs`／`*.mjs`、Playwright＋Chromium系ブラウザ）、AI連携テスト、README画像の再撮影の手順は [tests/README.md](tests/README.md) を参照。UIを変更したら該当するブラウザ検証を実行する。

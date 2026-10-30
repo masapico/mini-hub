@@ -256,6 +256,9 @@ func TestAIDirectUpstreamStatusAndWriteDeadline(t *testing.T) {
 			reply(strings.Repeat("a", 300*1024))
 		case "/stream":
 			w.Header().Set("Content-Type", "text/event-stream")
+		case "/incomplete":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"choices":[{"message":{"role":"assistant","content":""},"finish_reason":"length"}]}`)
 		case "/slow":
 			select {
 			case <-time.After(time.Second):
@@ -273,7 +276,7 @@ func TestAIDirectUpstreamStatusAndWriteDeadline(t *testing.T) {
 	if err := store.SaveUser(ctx, &domain.User{ID: "user", Name: "User", Enabled: true, Role: domain.RoleUser}); err != nil {
 		t.Fatal(err)
 	}
-	accounts := map[string]string{"delayed-ai": "", "long-ai": "", "huge-ai": "", "stream-ai": "", "slow-ai": "50ms"}
+	accounts := map[string]string{"delayed-ai": "", "long-ai": "", "huge-ai": "", "stream-ai": "", "incomplete-ai": "", "slow-ai": "50ms"}
 	for id, timeout := range accounts {
 		path := "/" + strings.TrimSuffix(id, "-ai")
 		if err := store.SaveAIAccount(ctx, &domain.AIAccount{ID: id, Name: id, URL: upstream.URL + path, Model: "m", Timeout: timeout, Enabled: true}); err != nil {
@@ -300,6 +303,7 @@ func TestAIDirectUpstreamStatusAndWriteDeadline(t *testing.T) {
 		{"long-ai", http.StatusOK, `"reply":"あ`},
 		{"huge-ai", http.StatusBadGateway, "長すぎる"},
 		{"stream-ai", http.StatusBadGateway, "正常な応答"},
+		{"incomplete-ai", http.StatusBadGateway, "最大トークン数"},
 		{"slow-ai", http.StatusGatewayTimeout, "時間内"},
 	} {
 		got := request(t, handler, http.MethodPost, "/api/ai/direct", "user", body(c.id))

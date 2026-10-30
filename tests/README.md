@@ -16,7 +16,7 @@ go test -race ./...
 
 ## ベースパスとリバースプロキシ
 
-`node --test tests/urls.test.mjs` は追加ライブラリなしで、URL生成とログインの戻り先の検証を実行します。Goテストでは設定の検証・正規化、公開パスの境界、静的アセットとページ内リンク、認証リダイレクトを確認します。
+`node --test tests/urls.test.mjs` は追加ライブラリなしで、URL生成とログインの戻り先の検証を実行します。`node --test tests/ai-canvas.test.mjs` は、AIキャンバスが送信する会話を検証します（エラーになった依頼の除外、それより前の添付の`[添付ファイル: <ファイル名>]`表記、直近10件）。Goテストでは設定の検証・正規化、公開パスの境界、静的アセットとページ内リンク、認証リダイレクトを確認します。
 
 `base-path-browser.cjs` は一時データの実サーバーと、パス・Hostを保持するHTTP／WebSocketプロキシでブラウザ操作を検証します。Playwrightが `NODE_PATH` 上に必要です。`BROWSER_PATH` でChromium系ブラウザを指定できます。Windowsでは省略時にEdgeを使用します。
 
