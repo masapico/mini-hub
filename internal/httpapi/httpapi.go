@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/masapico/minihub/internal/auth"
 	"github.com/masapico/minihub/internal/domain"
@@ -17,6 +18,9 @@ import (
 )
 
 const maxRequestBytes = 256 * 1024
+
+// directAIWriteMargin is added to the AI account timeout when extending the write deadline.
+const directAIWriteMargin = 30 * time.Second
 
 type Authenticator interface {
 	Authenticate(*http.Request) (string, error)
@@ -1186,6 +1190,14 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 		status, message = http.StatusConflict, "予定調整が更新されています。再読み込みしてください"
 	case errors.Is(err, service.ErrRateLimited):
 		status, message = http.StatusTooManyRequests, "リクエスト回数の上限を超えました。しばらく待ってから再試行してください"
+	case errors.Is(err, service.ErrAIUnavailable):
+		status, message = http.StatusServiceUnavailable, "AI連携は現在利用できません"
+	case errors.Is(err, service.ErrAITimeout):
+		status, message = http.StatusGatewayTimeout, "AIの応答が時間内に返りませんでした。時間をおいて再度お試しください"
+	case errors.Is(err, service.ErrAIReplyTooLarge):
+		status, message = http.StatusBadGateway, "AIの回答が長すぎるため表示できません。回答を短くするよう指示して再度お試しください"
+	case errors.Is(err, service.ErrAIUpstream):
+		status, message = http.StatusBadGateway, "AIから正常な応答を受信できませんでした。時間をおいて再度お試しください"
 	case errors.Is(err, service.ErrInvalid):
 		status, message = http.StatusBadRequest, strings.TrimPrefix(err.Error(), service.ErrInvalid.Error()+": ")
 		if message == service.ErrInvalid.Error() || message == "" {
@@ -1265,6 +1277,8 @@ func (a *API) directAI(w http.ResponseWriter, r *http.Request, userID string) {
 		a.writeError(w, fmt.Errorf("%w: invalid JSON body: %v", service.ErrInvalid, err))
 		return
 	}
+	// The server-wide WriteTimeout is shorter than AI response times; extend it for this request.
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(a.service.DirectAITimeout(input.AIAccountID) + directAIWriteMargin))
 	resp, err := a.service.DirectAICall(r.Context(), userID, input)
 	if err != nil {
 		if errors.Is(err, service.ErrQuotaExceeded) {

@@ -28,6 +28,9 @@ var (
 	ErrInvalid         = errors.New("invalid request")
 	ErrQuotaExceeded   = errors.New("daily AI quota exceeded")
 	ErrAIUnavailable   = errors.New("ai service unavailable")
+	ErrAIUpstream      = errors.New("ai upstream error")
+	ErrAITimeout       = errors.New("ai request timed out")
+	ErrAIReplyTooLarge = errors.New("ai reply too large")
 	ErrRateLimited     = errors.New("rate limit exceeded")
 )
 

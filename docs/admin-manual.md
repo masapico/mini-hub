@@ -145,10 +145,12 @@ location ^~ /hub/ {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection $minihub_connection_upgrade;
-    proxy_read_timeout 75s;
+    proxy_read_timeout 180s;
     client_max_body_size 70m;
 }
 ```
+
+`proxy_read_timeout` は、AIキャンバスがAIの回答を待つ時間（AIアカウントの `timeout`、省略時は120秒）に30秒を加えた値以上にします。既定値の60秒のままだと、回答に時間がかかるAI（RAGなど）への問い合わせが、minihubやAI側でエラーにならないまま `504 Gateway Time-out` になります。`timeout` を延ばす場合は、この値も合わせて延ばしてください。WebSocket接続には、サーバーから定期的に送る通信があるため、この値の影響はありません。
 
 `proxy_pass` の宛先には末尾の `/` を付けず、`/hub/` を保ったまま転送します。例えば `/hub/api/me` はminihubにも `/hub/api/me` として届く必要があります。ベースパスは設定値を使用し、`X-Forwarded-Prefix` からは推測しません。`Host` は外部のホスト名・ポートを保持し、`Upgrade` と `Connection` はWebSocket接続のために転送します。nginxの仕様は [proxy_pass](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_pass) と [WebSocket転送](https://nginx.org/en/docs/http/websocket.html) を参照してください。
 

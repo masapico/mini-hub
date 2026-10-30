@@ -30,6 +30,10 @@ const aiMaxContextBytes = 1024 * 1024
 const aiMaxContextMessages = 1000
 const aiMaxAttachmentRequestBytes = 70 * 1024 * 1024
 
+// aiMaxDirectReplyBytes limits AI canvas replies. They are kept in the browser,
+// not posted to channels, so MaxMessageBytes does not apply.
+const aiMaxDirectReplyBytes = 256 * 1024
+
 var validAIID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,60}$`)
 
 func ValidateAIAccount(a domain.AIAccount) error {
@@ -819,6 +823,18 @@ func (s *Service) GetAIDailyUsageSummary(ctx context.Context, actorID, date stri
 	}, nil
 }
 
+// DirectAITimeout returns how long DirectAICall may wait for the given account.
+func (s *Service) DirectAITimeout(accountID string) time.Duration {
+	if s.ai != nil {
+		for _, a := range s.ai.getAccounts() {
+			if a.ID == accountID && a.Enabled {
+				return a.RequestTimeout()
+			}
+		}
+	}
+	return aiEndpoint{}.RequestTimeout()
+}
+
 func (s *Service) DirectAICall(ctx context.Context, userID string, req domain.AIDirectRequest) (*domain.AIDirectResponse, error) {
 	if !s.aiCanvasEnabled {
 		return nil, ErrForbidden
@@ -908,7 +924,7 @@ func (s *Service) DirectAICall(ctx context.Context, userID string, req domain.AI
 		return nil, err
 	}
 	if len(body) > maxBytes {
-		return nil, errors.New("request exceeds maximum size")
+		return nil, fmt.Errorf("%w: 会話履歴または添付ファイルが大きすぎます。新しい会話で、短い内容から再度お試しください", ErrInvalid)
 	}
 
 	reqCtx, cancel := context.WithTimeout(ctx, target.RequestTimeout())
@@ -926,18 +942,42 @@ func (s *Service) DirectAICall(ctx context.Context, userID string, req domain.AI
 
 	resp, err := d.client.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("AI request failed: %w", err)
+		// Report the transport error without the account URL.
+		cause := err
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			cause = urlErr.Err
+		}
+		if errors.Is(reqCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+			d.logger.Warn("AI direct request timed out", "aiId", target.ID, "userId", userID, "timeout", target.RequestTimeout().String())
+			return nil, fmt.Errorf("%w: %v", ErrAITimeout, cause)
+		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		d.logger.Warn("AI direct request failed", "aiId", target.ID, "userId", userID, "error", cause)
+		return nil, fmt.Errorf("%w: request failed: %v", ErrAIUpstream, cause)
 	}
 	defer resp.Body.Close()
 
-	media, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	contentType := resp.Header.Get("Content-Type")
+	media, _, _ := mime.ParseMediaType(contentType)
 	if resp.StatusCode != http.StatusOK || media != "application/json" {
-		return nil, fmt.Errorf("AI response status %d", resp.StatusCode)
+		d.logger.Warn("AI direct response rejected", "aiId", target.ID, "userId", userID, "status", resp.StatusCode, "contentType", contentType)
+		return nil, fmt.Errorf("%w: response status %d, content type %q", ErrAIUpstream, resp.StatusCode, contentType)
 	}
 
 	b, err := io.ReadAll(io.LimitReader(resp.Body, aiMaxContextBytes+1))
 	if err != nil {
-		return nil, err
+		if errors.Is(reqCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+			d.logger.Warn("AI direct request timed out", "aiId", target.ID, "userId", userID, "timeout", target.RequestTimeout().String())
+			return nil, fmt.Errorf("%w: %v", ErrAITimeout, err)
+		}
+		return nil, fmt.Errorf("%w: read response: %v", ErrAIUpstream, err)
+	}
+	if len(b) > aiMaxContextBytes {
+		d.logger.Warn("AI direct response too large", "aiId", target.ID, "userId", userID, "limitBytes", aiMaxContextBytes)
+		return nil, fmt.Errorf("%w: response body exceeds %d bytes", ErrAIReplyTooLarge, aiMaxContextBytes)
 	}
 
 	var reply struct {
@@ -948,12 +988,18 @@ func (s *Service) DirectAICall(ctx context.Context, userID string, req domain.AI
 		} `json:"choices"`
 	}
 	if err := json.Unmarshal(b, &reply); err != nil || len(reply.Choices) == 0 || reply.Choices[0].Message.Content == nil {
-		return nil, errors.New("invalid AI response format")
+		d.logger.Warn("AI direct response format invalid", "aiId", target.ID, "userId", userID)
+		return nil, fmt.Errorf("%w: invalid response format", ErrAIUpstream)
 	}
 
 	answer := *reply.Choices[0].Message.Content
-	if len(answer) > MaxMessageBytes || strings.TrimSpace(answer) == "" {
-		return nil, errors.New("AI reply empty or exceeds maximum size")
+	if strings.TrimSpace(answer) == "" {
+		d.logger.Warn("AI direct reply empty", "aiId", target.ID, "userId", userID)
+		return nil, fmt.Errorf("%w: empty reply", ErrAIUpstream)
+	}
+	if len(answer) > aiMaxDirectReplyBytes {
+		d.logger.Warn("AI direct reply too large", "aiId", target.ID, "userId", userID, "bytes", len(answer), "limitBytes", aiMaxDirectReplyBytes)
+		return nil, fmt.Errorf("%w: reply exceeds %d bytes", ErrAIReplyTooLarge, aiMaxDirectReplyBytes)
 	}
 
 	newUsed, err := s.storage.IncrementAIDailyUsage(ctx, userID, today)

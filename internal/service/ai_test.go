@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/masapico/minihub/internal/domain"
 )
@@ -501,5 +503,92 @@ func TestDirectAICallSlidingWindow(t *testing.T) {
 	lastReceived := receivedMessages[9]["content"]
 	if lastReceived != "Message 15" {
 		t.Fatalf("expected last received message to be 'Message 15', got '%v'", lastReceived)
+	}
+}
+
+func TestDirectAICallUpstreamErrors(t *testing.T) {
+	s, ctx, user, _ := setupTestService(t)
+
+	writeReply := func(w http.ResponseWriter, content string) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{"message": map[string]any{"role": "assistant", "content": content}}},
+		})
+	}
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/long":
+			writeReply(w, strings.Repeat("あ", 10000)) // 30,000 bytes: over MaxMessageBytes
+		case "/huge":
+			writeReply(w, strings.Repeat("a", aiMaxDirectReplyBytes+1))
+		case "/stream":
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = io.WriteString(w, "data: {}\n\n")
+		case "/status":
+			http.Error(w, "upstream failure", http.StatusInternalServerError)
+		case "/format":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"answer":"no choices"}`)
+		case "/empty":
+			writeReply(w, "  ")
+		case "/slow":
+			select {
+			case <-release:
+			case <-r.Context().Done():
+			}
+		}
+	}))
+	defer server.Close()
+	defer close(release)
+
+	cases := []struct {
+		id, path, timeout string
+		want              error
+	}{
+		{"long-ai", "/long", "", nil},
+		{"huge-ai", "/huge", "", ErrAIReplyTooLarge},
+		{"stream-ai", "/stream", "", ErrAIUpstream},
+		{"status-ai", "/status", "", ErrAIUpstream},
+		{"format-ai", "/format", "", ErrAIUpstream},
+		{"empty-ai", "/empty", "", ErrAIUpstream},
+		{"slow-ai", "/slow", "50ms", ErrAITimeout},
+	}
+	for _, c := range cases {
+		account := domain.AIAccount{ID: c.id, Name: c.id, Enabled: true, URL: server.URL + c.path, Model: "test-model", Timeout: c.timeout}
+		if err := s.storage.SaveAIAccount(ctx, &account); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.StartAI(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
+	defer s.CloseAI()
+	s.SetAICanvasOptions(true, 0)
+
+	if got := s.DirectAITimeout("slow-ai"); got != 50*time.Millisecond {
+		t.Fatalf("DirectAITimeout(slow-ai) = %v", got)
+	}
+	if got := s.DirectAITimeout("missing"); got != 120*time.Second {
+		t.Fatalf("DirectAITimeout(missing) = %v", got)
+	}
+
+	for _, c := range cases {
+		resp, err := s.DirectAICall(ctx, user, domain.AIDirectRequest{
+			AIAccountID: c.id,
+			Messages:    []domain.AIDirectMessage{{Role: "user", Content: "hello"}},
+		})
+		if c.want == nil {
+			if err != nil || len(resp.Reply) != 30000 {
+				t.Fatalf("%s: expected long reply, got err=%v", c.id, err)
+			}
+			continue
+		}
+		if !errors.Is(err, c.want) {
+			t.Fatalf("%s: expected %v, got %v", c.id, c.want, err)
+		}
+		if strings.Contains(err.Error(), server.URL) {
+			t.Fatalf("%s: error leaks upstream URL: %v", c.id, err)
+		}
 	}
 }

@@ -1,12 +1,16 @@
 package httpapi_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/masapico/minihub/internal/domain"
 	"github.com/masapico/minihub/internal/httpapi"
@@ -233,3 +237,99 @@ func TestAICanvasEndpoints(t *testing.T) {
 	}
 }
 
+
+func TestAIDirectUpstreamStatusAndWriteDeadline(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reply := func(content string) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"choices": []map[string]any{{"message": map[string]any{"role": "assistant", "content": content}}},
+			})
+		}
+		switch r.URL.Path {
+		case "/delayed":
+			time.Sleep(300 * time.Millisecond)
+			reply("delayed answer")
+		case "/long":
+			reply(strings.Repeat("あ", 10000))
+		case "/huge":
+			reply(strings.Repeat("a", 300*1024))
+		case "/stream":
+			w.Header().Set("Content-Type", "text/event-stream")
+		case "/slow":
+			select {
+			case <-time.After(time.Second):
+			case <-r.Context().Done():
+			}
+		}
+	}))
+	defer upstream.Close()
+
+	store, err := storetest.New(t, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := store.SaveUser(ctx, &domain.User{ID: "user", Name: "User", Enabled: true, Role: domain.RoleUser}); err != nil {
+		t.Fatal(err)
+	}
+	accounts := map[string]string{"delayed-ai": "", "long-ai": "", "huge-ai": "", "stream-ai": "", "slow-ai": "50ms"}
+	for id, timeout := range accounts {
+		path := "/" + strings.TrimSuffix(id, "-ai")
+		if err := store.SaveAIAccount(ctx, &domain.AIAccount{ID: id, Name: id, URL: upstream.URL + path, Model: "m", Timeout: timeout, Enabled: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	svc := service.New(store)
+	svc.SetAICanvasOptions(true, 0)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	if err := svc.StartAI(ctx, logger); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(svc.CloseAI)
+	handler := httpapi.New(svc, httpapi.HeaderAuthenticator{}, logger)
+
+	body := func(id string) map[string]any {
+		return map[string]any{"aiAccountId": id, "messages": []map[string]string{{"role": "user", "content": "hi"}}}
+	}
+	for _, c := range []struct {
+		id     string
+		status int
+		text   string
+	}{
+		{"long-ai", http.StatusOK, `"reply":"あ`},
+		{"huge-ai", http.StatusBadGateway, "長すぎる"},
+		{"stream-ai", http.StatusBadGateway, "正常な応答"},
+		{"slow-ai", http.StatusGatewayTimeout, "時間内"},
+	} {
+		got := request(t, handler, http.MethodPost, "/api/ai/direct", "user", body(c.id))
+		if got.Code != c.status || !strings.Contains(got.Body.String(), c.text) {
+			t.Fatalf("%s: got %d %s", c.id, got.Code, got.Body.String())
+		}
+		if strings.Contains(got.Body.String(), upstream.URL) {
+			t.Fatalf("%s: response leaks upstream URL", c.id)
+		}
+	}
+
+	// An AI reply slower than the server WriteTimeout must still reach the client.
+	server := httptest.NewUnstartedServer(handler)
+	server.Config.WriteTimeout = 100 * time.Millisecond
+	server.Start()
+	defer server.Close()
+	raw, _ := json.Marshal(body("delayed-ai"))
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/api/ai/direct", bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("X-User-ID", "user")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("delayed reply was cut off by WriteTimeout: %v", err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(b), "delayed answer") {
+		t.Fatalf("delayed reply: %d %s", resp.StatusCode, b)
+	}
+}
