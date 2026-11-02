@@ -13,6 +13,7 @@
 | [投稿の物理削除](retention-proposal.md) | 削除範囲、停止中の実行手順、復旧 |
 | [通信負荷の見積もり](network-load.md) | 500同時接続時の概算、配信・HTTP取得の負荷、導入前の実測 |
 | [リリースビルドと手動公開](releases.md) | 4種の配布物、ビルドスクリプト、検証、GitHub Releasesへの登録 |
+| [ブックマーク機能の検討資料](bookmark-proposal.md) | 未実装の機能案。リアクションとの使い分け、UX、保存・API・UIの実装案 |
 
 図を更新するときは `internal/domain`、`internal/service`、`internal/storage`、`internal/httpapi`、`internal/realtime` と照合してください。
 
