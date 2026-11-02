@@ -15,8 +15,10 @@ const assert = require('node:assert/strict');
         users[1].name = users[2].name = '同名';
         let detail = { id: 'general', name: '全社連絡', type: 'public', members: ['u000', 'u499'], managers: ['u000'], groups: ['sales'], users, effectiveMembers: [], capabilities: { manageSettings: true, manageMembers: true, archive: true, restore: false } };
         let failSave = false, posted;
+        const creations = [];
         await page.route('http://chat.test/**', async route => {
             const request = route.request(), p = new URL(request.url()).pathname;
+            if (request.method() === 'POST' && ['/api/channels', '/api/groups', '/api/users', '/api/admin/ai-accounts'].includes(p)) creations.push(p);
             if (p === '/api/me') return route.fulfill({ status: 503, json: { error: 'fixture bootstrap' } });
             if (p === '/api/channels/general/members') {
                 posted = request.postDataJSON();
@@ -28,6 +30,7 @@ const assert = require('node:assert/strict');
             }
             if (p === '/api/channels/general/management') return route.fulfill({ json: detail });
             if (p === '/api/channels') return route.fulfill({ json: detail.managers.includes('u000') ? [detail] : [] });
+            if (p === '/api/ai-accounts' || p === '/api/admin/ai-accounts') return route.fulfill({ json: [] });
             if (p.startsWith('/api/')) return route.fulfill({ json: {} });
             const file = path.join(__dirname, '..', 'web', p === '/' ? 'index.html' : p);
             let body = fs.readFileSync(file);
@@ -192,6 +195,42 @@ const assert = require('node:assert/strict');
         });
         assert.deepEqual(profileButtons.password, profileButtons.logout);
         assert(profileButtons.inside);
+        // A full-width character in an ID is shown while typing and blocks the request.
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await page.locator('#addChannel').evaluate(button => button.classList.remove('hidden'));
+        await page.evaluate(() => bootstrap.Modal.getOrCreateInstance($('channelModal')).show());
+        await page.locator('#channelModal').waitFor({ state: 'visible' });
+        await page.locator('#cname').fill('全角テスト');
+        await page.locator('#cid').fill('s_00４012z');
+        assert((await page.locator('#cidError').innerText()).startsWith('5文字目の「４」は使用できません（全角文字です）'));
+        await page.locator('#createChannelSubmit').click();
+        await page.locator('#cid').fill('s_004012z');
+        assert(await page.locator('#cidError').isHidden());
+        assert(await page.locator('#cid').evaluate(input => input.checkValidity()));
+        await page.evaluate(() => bootstrap.Modal.getOrCreateInstance($('channelModal')).hide());
+        await page.locator('#channelModal').waitFor({ state: 'hidden' });
+        for (const [field, form] of [['gid', 'groupForm'], ['aiID', 'aiForm'], ['newid', 'one']]) {
+            const state = await page.evaluate(([field, form]) => {
+                const input = $(field);
+                input.disabled = false;
+                input.value = 'ａbc';
+                input.dispatchEvent(new Event('input'));
+                const invalid = { valid: input.checkValidity(), message: $(`${field}Error`).textContent };
+                $(form).requestSubmit();
+                input.value = 'abc';
+                input.dispatchEvent(new Event('input'));
+                return { ...invalid, fixed: input.checkValidity(), cleared: $(`${field}Error`).textContent === '' };
+            }, [field, form]);
+            assert.equal(state.valid, false, field);
+            assert(state.message.startsWith('1文字目の「ａ」は使用できません（全角文字です）'), field);
+            assert(state.fixed && state.cleared, field);
+        }
+        await page.evaluate(() => {
+            $('bulktext').value = 'u1\t佐藤\tpassword-0001\nｕ2\t鈴木\tpassword-0002';
+            $('bulk').requestSubmit();
+        });
+        await page.waitForFunction(() => document.body.innerText.includes('2行目: 1文字目の「ｕ」は使用できません'));
+        assert.deepEqual(creations, []);
         assert.deepEqual(errors, []);
         console.log('Channel management browser scenarios passed (500 users; desktop/mobile; draft/save/delegation).');
     } finally { await browser.close(); }

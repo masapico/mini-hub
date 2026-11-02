@@ -1,5 +1,11 @@
 // Admin management: channels, groups, AI accounts, and users.
 
+const userIDRules = { reservedPrefix: "ai_" };
+MinihubIDs.bindIDField($("cid"));
+MinihubIDs.bindIDField($("gid"));
+MinihubIDs.bindIDField($("newid"), userIDRules);
+const syncAIIDField = MinihubIDs.bindIDField($("aiID"), { max: 61 });
+
 // --- Channel Creation ---
 $("addChannel").onclick = () =>
     bootstrap.Modal.getOrCreateInstance($("channelModal")).show();
@@ -692,6 +698,7 @@ function showAIPane(mode, account = null) {
         $("aiIDRequiredBadge")?.classList.remove("hidden");
         $("aiID").disabled = false;
         $("aiID").value = "";
+        syncAIIDField();
         $("aiName").value = "";
         $("aiEnabled").checked = true;
         $("aiURL").value = "";
@@ -713,6 +720,7 @@ function showAIPane(mode, account = null) {
         $("aiIDRequiredBadge")?.classList.add("hidden");
         $("aiID").disabled = true;
         $("aiID").value = account.id;
+        syncAIIDField();
         $("aiName").value = account.name || "";
         $("aiEnabled").checked = account.enabled !== false;
         $("aiURL").value = account.url || "";
@@ -962,6 +970,8 @@ $("bulk").onsubmit = (e) => {
                 let p = x.split("\t");
                 if (p.length < 3)
                     throw Error(`${i + 1}行目は3列以上必要です`);
+                const problem = MinihubIDs.idProblem(p[0], userIDRules);
+                if (problem) throw Error(`${i + 1}行目: ${problem}`);
                 return {
                     id: p[0],
                     name: p[1],

@@ -754,6 +754,9 @@ func (s *Service) CreateChannel(ctx context.Context, actorID string, channel dom
 	if channel.ID == "" || channel.Name == "" || utf8.RuneCountInString(channel.Name) > 100 {
 		return nil, fmt.Errorf("%w: チャンネルIDと100文字以内の名前が必要です", ErrInvalid)
 	}
+	if !validUserID.MatchString(channel.ID) {
+		return nil, fmt.Errorf("%w: チャンネルIDは半角英数字で始め、半角英数字・「_」「-」のみの64文字以内で指定してください", ErrInvalid)
+	}
 	if channel.Type != domain.ChannelPublic && channel.Type != domain.ChannelPrivate {
 		return nil, fmt.Errorf("%w: チャンネル種別には public または private を指定してください", ErrInvalid)
 	}

@@ -198,6 +198,28 @@ func TestReactionHTTPFlow(t *testing.T) {
 	}
 }
 
+func TestCreateChannelValidatesIDFormat(t *testing.T) {
+	handler := setupAPI(t)
+	if got := request(t, handler, http.MethodPost, "/api/channels", "admin", map[string]any{"id": "s_004012z", "name": "Valid", "type": "public"}).Code; got != http.StatusCreated {
+		t.Fatalf("valid id status=%d", got)
+	}
+	for name, id := range map[string]string{
+		"full-width letter":     "ｓ_004012z",
+		"full-width underscore": "s＿004012z",
+		"zero-width character":  "s_004012z​",
+		"japanese":              "相談",
+		"leading underscore":    "_general",
+		"too long":              strings.Repeat("a", 65),
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := request(t, handler, http.MethodPost, "/api/channels", "admin", map[string]any{"id": id, "name": "Invalid", "type": "public"})
+			if got.Code != http.StatusBadRequest || !strings.Contains(got.Body.String(), "半角英数字で始め") {
+				t.Fatalf("status=%d body=%s", got.Code, got.Body)
+			}
+		})
+	}
+}
+
 func TestHTTPAuthenticationAndAdminAuthorization(t *testing.T) {
 	handler := setupAPI(t)
 	if got := request(t, handler, http.MethodGet, "/api/me", "", nil).Code; got != http.StatusUnauthorized {

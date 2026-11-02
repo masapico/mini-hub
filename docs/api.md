@@ -49,7 +49,7 @@ rm -f "$cookie_jar"
 | `GET` | `/api/groups/directory` | チャンネル割当用グループ一覧 |
 | `GET` | `/api/channels` | 閲覧可能チャネル一覧 |
 | `GET` | `/api/channels/read-statuses` | 閲覧可能な全チャネルの既読・未読状態 |
-| `POST` | `/api/channels` | チャネル作成（管理者のみ） |
+| `POST` | `/api/channels` | チャネル作成（管理者のみ）。`id` は半角英数字で始め、半角英数字・`_`・`-` のみの1〜64文字。それ以外は `400` |
 | `GET` | `/api/channels/{id}` | チャネル取得 |
 | `GET` | `/api/channels?management=true&includeArchived=true` | 管理可能なチャネル一覧 |
 | `GET` | `/api/channels/{id}/management` | チャネル管理情報 |
